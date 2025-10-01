@@ -32,3 +32,11 @@ Then run the example program:
 ```bash
 python3 example.py
 ```
+
+## Connecting to DB in MySQL CLI
+
+To connect to the MySQL server using the command line interface, run:
+
+```bash
+docker exec -it mysql-local mysql -u root -psecret
+```
