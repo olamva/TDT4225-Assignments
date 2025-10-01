@@ -1,5 +1,6 @@
-from DbConnector import DbConnector
 from tabulate import tabulate
+
+from DbConnector import DbConnector
 
 
 class ExampleProgram:
