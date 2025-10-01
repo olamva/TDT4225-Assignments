@@ -1,18 +1,13 @@
 import numpy as np
 import pandas as pd
+from data_loader import get_missing_data_rows, load_porto_data
 
-csv = "./porto.csv"
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', None)
 pd.set_option('display.max_colwidth', 50)
 
-# Reading the data into a pandas DataFrame
-# Note: TIMESTAMP needs to be converted from Unix time to datetime
-df = pd.read_csv(csv, nrows=10)
-
-# Convert TIMESTAMP from Unix time to datetime
-if 'TIMESTAMP' in df.columns:
-    df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'], unit='s')
+# Load the data using the data loader
+df = load_porto_data()
 
 # Display basic information about the dataset
 print("=== PORTO TAXI DATASET ANALYSIS ===\n")
@@ -63,3 +58,21 @@ if 'POLYLINE' in df.columns:
         if pd.notna(polyline) and polyline != '[]':
             print(f"Trip {idx} polyline (first 100 chars): {str(polyline)[:100]}...")
             break
+
+print("\n=== ROWS WITH MISSING DATA (MISSING_DATA = True) ===")
+if 'MISSING_DATA' in df.columns:
+    missing_data_rows = get_missing_data_rows(df)
+    print(f"Total rows with missing data: {len(missing_data_rows)}")
+    print(f"Percentage of rows with missing data: {(len(missing_data_rows) / len(df) * 100):.2f}%")
+
+    if len(missing_data_rows) > 0:
+        print("\nFirst 10 rows with missing data:")
+        print(missing_data_rows.head(10))
+
+        print("\nSample of POLYLINE data for missing data rows:")
+        for idx, (index, row) in enumerate(missing_data_rows.head(5).iterrows()):
+            print(f"Row {index} - TRIP_ID: {row.get('TRIP_ID', 'N/A')}, POLYLINE: {str(row.get('POLYLINE', 'N/A'))[:100]}...")
+    else:
+        print("No rows found with MISSING_DATA = True")
+else:
+    print("MISSING_DATA column not found in dataset")
