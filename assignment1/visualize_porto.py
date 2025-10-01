@@ -56,27 +56,27 @@ def create_time_based_plots(df, outdir):
             counts_by_hour = df["hour"].value_counts().sort_index()
             plt.figure(figsize=(10, 6))
             counts_by_hour.plot(kind="bar")
-            plt.title("Antall turer per time på døgnet")
-            plt.xlabel("Time (0–23)")
-            plt.ylabel("Antall turer")
+            plt.title("Number of trips per hour of day")
+            plt.xlabel("Hour (0-23)")
+            plt.ylabel("Number of trips")
             plt.tight_layout()
-            plt.savefig(os.path.join(outdir, "turer_per_time.png"))
+            plt.savefig(os.path.join(outdir, "trips_per_hour.png"))
             plt.close()
-            plots_created.append("turer_per_time.png")
+            plots_created.append("trips_per_hour.png")
 
         # Plot 2: Daglige turer
         if "date" in df.columns:
             per_day = df.groupby("date").size().sort_index()
             plt.figure(figsize=(12, 6))
             per_day.plot(kind="line")
-            plt.title("Antall turer per dag")
-            plt.xlabel("Dato")
-            plt.ylabel("Antall turer")
+            plt.title("Number of trips per day")
+            plt.xlabel("Date")
+            plt.ylabel("Number of trips")
             plt.xticks(rotation=45)
             plt.tight_layout()
-            plt.savefig(os.path.join(outdir, "turer_per_dag.png"))
+            plt.savefig(os.path.join(outdir, "trips_per_day.png"))
             plt.close()
-            plots_created.append("turer_per_dag.png")
+            plots_created.append("trips_per_day.png")
 
     return plots_created
 
@@ -92,26 +92,26 @@ def create_categorical_plots(df, outdir):
         call_counts = df["CALL_TYPE"].value_counts()
         plt.figure(figsize=(8, 6))
         call_counts.plot(kind="bar")
-        plt.title("Fordeling av CALL_TYPE")
+        plt.title("Distribution of CALL_TYPE")
         plt.xlabel("CALL_TYPE")
-        plt.ylabel("Antall")
+        plt.ylabel("Count")
         plt.tight_layout()
-        plt.savefig(os.path.join(outdir, "fordeling_call_type.png"))
+        plt.savefig(os.path.join(outdir, "call_type_distribution.png"))
         plt.close()
-        plots_created.append("fordeling_call_type.png")
+        plots_created.append("call_type_distribution.png")
 
     # Plot: Manglende data
     if "MISSING_DATA" in df.columns:
         miss_counts = df["MISSING_DATA"].value_counts(dropna=False)
         plt.figure(figsize=(8, 6))
         miss_counts.plot(kind="bar")
-        plt.title("MISSING_DATA fordeling")
+        plt.title("MISSING_DATA distribution")
         plt.xlabel("MISSING_DATA (False/True)")
-        plt.ylabel("Antall rader")
+        plt.ylabel("Number of rows")
         plt.tight_layout()
-        plt.savefig(os.path.join(outdir, "missing_data_fordeling.png"))
+        plt.savefig(os.path.join(outdir, "missing_data_distribution.png"))
         plt.close()
-        plots_created.append("missing_data_fordeling.png")
+        plots_created.append("missing_data_distribution.png")
 
     return plots_created
 
@@ -139,14 +139,14 @@ def create_duration_plot(df, outdir):
 
         plt.figure(figsize=(10, 6))
         duration_data.hist(bins=40, edgecolor='black', alpha=0.7)
-        plt.title(f"Distribusjon av turvarighet (sek, toppet ved 95-persentil)\n"
-                 f"Basert på {len(df)} rader")
-        plt.xlabel("Varighet (sekunder)")
-        plt.ylabel("Antall turer")
+        plt.title(f"Distribution of trip duration (sec, capped at 95th percentile)\n"
+                 f"Based on {len(df)} rows")
+        plt.xlabel("Duration (seconds)")
+        plt.ylabel("Number of trips")
         plt.tight_layout()
-        plt.savefig(os.path.join(outdir, "varighet_hist.png"))
+        plt.savefig(os.path.join(outdir, "duration_histogram.png"))
         plt.close()
-        plots_created.append("varighet_hist.png")
+        plots_created.append("duration_histogram.png")
 
         print(f"Duration analysis completed using full dataset ({len(df)} rows)")
 
@@ -158,9 +158,24 @@ def main():
 
     print("=== PORTO TAXI VISUALIZATION (OPTIMIZED) ===")
 
-    # 1) Load full dataset
-    print("Loading full dataset...")
-    df = load_porto_data(csv_path="./porto.csv", pickle_path="./porto_data.pkl", verbose=True)
+    # 1) Load cleaned dataset
+    print("Loading cleaned dataset...")
+    try:
+        # Try to load cleaned data first (faster)
+        df = pd.read_pickle("./data/cleaned/cleaned_porto_data.pkl")
+        print("Loaded cleaned dataset from pickle cache")
+    except FileNotFoundError:
+        # Fallback to CSV if pickle doesn't exist
+        try:
+            df = pd.read_csv("./data/cleaned/cleaned_porto_data.csv")
+            print("Loaded cleaned dataset from CSV")
+            # Convert TIMESTAMP if needed
+            if "TIMESTAMP" in df.columns and not pd.api.types.is_datetime64_any_dtype(df["TIMESTAMP"]):
+                df["TIMESTAMP"] = pd.to_datetime(df["TIMESTAMP"], unit="s", errors="coerce")
+        except FileNotFoundError:
+            print("❌ Cleaned dataset not found! Please run clean_dataset.py first.")
+            print("Falling back to original dataset...")
+            df = load_porto_data(csv_path="./data/original/porto.csv", pickle_path="./data/original/porto_data.pkl", verbose=True)
 
     print(f"Loaded dataset with {len(df)} rows and {len(df.columns)} columns")
 

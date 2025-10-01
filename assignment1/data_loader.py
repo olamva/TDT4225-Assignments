@@ -10,7 +10,7 @@ import os
 import pandas as pd
 
 
-def load_porto_data(csv_path="./porto.csv", pickle_path="./porto_data.pkl", verbose=True):
+def load_porto_data(csv_path="./data/original/porto.csv", pickle_path="./data/original/porto_data.pkl", verbose=True):
     """
     Load Porto taxi data with caching support.
 
@@ -98,7 +98,7 @@ def get_dataset_info(df):
     return info
 
 
-def clear_cache(pickle_path="./porto_data.pkl"):
+def clear_cache(pickle_path="./data/original/porto_data.pkl"):
     """
     Clear the pickle cache file.
 
