@@ -1,8 +1,10 @@
+import sys
+
 import mysql.connector as mysql
 
 
-def setup_database():
-    """Create the testdb database if it doesn't exist"""
+def setup_database(db_name="testdb"):
+    """Create the specified database if it doesn't exist"""
     try:
         # Connect to MySQL server without specifying a database
         connection = mysql.connect(
@@ -14,8 +16,8 @@ def setup_database():
         cursor = connection.cursor()
 
         # Create database if it doesn't exist
-        cursor.execute("CREATE DATABASE IF NOT EXISTS testdb")
-        print("Database 'testdb' created successfully (or already exists)")
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
+        print(f"Database '{db_name}' created successfully (or already exists)")
 
         # Close the connection
         cursor.close()
@@ -25,4 +27,10 @@ def setup_database():
         print(f"ERROR: Failed to create database: {e}")
 
 if __name__ == "__main__":
-    setup_database()
+    # Check if a database name was provided as command line argument
+    if len(sys.argv) > 1:
+        db_name = sys.argv[1]
+    else:
+        db_name = "testdb"
+
+    setup_database(db_name)

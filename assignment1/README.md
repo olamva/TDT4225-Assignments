@@ -1,3 +1,14 @@
+# TDT4225 - Assignment 1
+
+## Setup Instructions
+
+Recommend to setup .venv locally and activate it:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
 Download the required packages from the requirements.txt file using pip:
 
 ```bash
