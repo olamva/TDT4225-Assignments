@@ -1,8 +1,23 @@
-# clean_dataset.py
-# Removes rows with missing data and rows from global min/max trip days
+import re
 
 import pandas as pd
 from data_loader import load_porto_data
+
+
+def fast_parse_polyline_len(s):
+    """
+    Fast polyline length parsing using regex instead of ast.literal_eval.
+    Counts the number of coordinate pairs by counting commas and brackets.
+    """
+    if pd.isna(s) or s == "" or s == "[]":
+        return 0
+    try:
+        # Count coordinate pairs by finding pattern [number,number]
+        # Each coordinate pair has format [longitude,latitude]
+        pairs = re.findall(r'\[[-+]?\d*\.?\d+,[-+]?\d*\.?\d+\]', str(s))
+        return len(pairs)
+    except Exception:
+        return 0
 
 
 def find_global_min_max_days():
@@ -38,7 +53,7 @@ def find_global_min_max_days():
 
 def clean_dataset(save_to_file=True, output_csv="./data/cleaned/cleaned_porto_data.csv", output_pickle="./data/cleaned/cleaned_porto_data.pkl"):
     """
-    Remove rows with missing data and rows from global min/max trip days.
+    Remove rows with missing data, rows from global min/max trip days, and short duration trips (≤ 30 seconds).
 
     Args:
         save_to_file (bool): Whether to save the cleaned dataset
@@ -107,7 +122,37 @@ def clean_dataset(save_to_file=True, output_csv="./data/cleaned/cleaned_porto_da
     total_minmax_removed = rows_after_missing_removal - rows_after_minmax_removal
 
     print(f"Rows removed from min/max days: {total_minmax_removed:,}")
-    print(f"Final dataset: {rows_after_minmax_removal:,} rows")
+    print(f"Rows after min/max removal: {rows_after_minmax_removal:,}")
+
+    # Step 4: Remove rows with duration ≤ 30 seconds
+    print(f"\n⏱️  REMOVING SHORT DURATION TRIPS (≤ 30 seconds):")
+
+    if "POLYLINE" in df_cleaned.columns:
+        # Calculate duration from polyline data
+        print("Calculating trip durations from polyline data...")
+        df_cleaned["poly_len"] = df_cleaned["POLYLINE"].apply(fast_parse_polyline_len)
+        df_cleaned["duration_sec"] = (df_cleaned["poly_len"].clip(lower=1) - 1) * 15
+
+        # Count rows with short duration
+        short_duration_rows = len(df_cleaned[df_cleaned["duration_sec"] <= 30])
+        print(f"Rows with duration ≤ 30 seconds: {short_duration_rows:,}")
+        print(f"Percentage of short duration trips: {(short_duration_rows/rows_after_minmax_removal)*100:.2f}%")
+
+        # Remove short duration trips
+        df_cleaned = df_cleaned[df_cleaned["duration_sec"] > 30].copy()
+
+        # Drop temporary calculation columns
+        df_cleaned = df_cleaned.drop(["poly_len", "duration_sec"], axis=1)
+
+        rows_after_duration_removal = len(df_cleaned)
+        duration_removed = rows_after_minmax_removal - rows_after_duration_removal
+
+        print(f"Rows removed (short duration): {duration_removed:,}")
+        print(f"Final dataset: {rows_after_duration_removal:,} rows")
+    else:
+        print("⚠️  POLYLINE column not found, skipping duration filtering")
+        rows_after_duration_removal = rows_after_minmax_removal
+        duration_removed = 0
 
     # Drop the temporary date column
     df_cleaned = df_cleaned.drop("date", axis=1)
@@ -117,8 +162,9 @@ def clean_dataset(save_to_file=True, output_csv="./data/cleaned/cleaned_porto_da
     print(f"Original rows: {original_rows:,}")
     print(f"Rows removed (missing data): {original_rows - rows_after_missing_removal:,}")
     print(f"Rows removed (min/max days): {total_minmax_removed:,}")
-    print(f"Final rows: {rows_after_minmax_removal:,}")
-    print(f"Total reduction: {original_rows - rows_after_minmax_removal:,} rows ({((original_rows - rows_after_minmax_removal)/original_rows)*100:.2f}%)")
+    print(f"Rows removed (short duration ≤ 30s): {duration_removed:,}")
+    print(f"Final rows: {rows_after_duration_removal:,}")
+    print(f"Total reduction: {original_rows - rows_after_duration_removal:,} rows ({((original_rows - rows_after_duration_removal)/original_rows)*100:.2f}%)")
 
     # Data quality check
     print(f"\n✅ DATA QUALITY CHECK:")
@@ -226,7 +272,7 @@ def main():
         cleaned_df = clean_dataset(save_to_file=True)
 
         # Validate the cleaning
-        validation = validate_cleaning(cleaned_df)
+        validate_cleaning(cleaned_df)
 
         print("\n🎉 DATASET CLEANING COMPLETED!")
 

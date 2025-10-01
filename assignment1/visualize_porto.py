@@ -3,6 +3,7 @@
 
 import os
 import re
+import sys
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -137,8 +138,9 @@ def create_duration_plot(df, outdir):
         cutoff = df["duration_sec"].quantile(0.95)
         duration_data = df.loc[df["duration_sec"] <= cutoff, "duration_sec"]
 
+        # Create histogram and analyze bins
         plt.figure(figsize=(10, 6))
-        duration_data.hist(bins=40, edgecolor='black', alpha=0.7)
+        n, bins, _ = plt.hist(duration_data, bins=100, edgecolor='black', alpha=0.7)
         plt.title(f"Distribution of trip duration (sec, capped at 95th percentile)\n"
                  f"Based on {len(df)} rows")
         plt.xlabel("Duration (seconds)")
@@ -148,34 +150,74 @@ def create_duration_plot(df, outdir):
         plt.close()
         plots_created.append("duration_histogram.png")
 
-        print(f"Duration analysis completed using full dataset ({len(df)} rows)")
+        # Find and print the two bins with highest values
+        print(f"\n📊 HISTOGRAM ANALYSIS:")
+        print(f"Total bins: {len(n)}")
+
+        # Get the indices of the two highest bins
+        highest_indices = n.argsort()[-2:][::-1]  # Get top 2 indices in descending order
+
+        print(f"\n🏆 TOP 2 BINS WITH HIGHEST VALUES:")
+        for i, bin_idx in enumerate(highest_indices, 1):
+            bin_start = bins[bin_idx]
+            bin_end = bins[bin_idx + 1]
+            bin_count = n[bin_idx]
+            bin_center = (bin_start + bin_end) / 2
+
+            print(f"\n{i}. Bin #{bin_idx + 1}:")
+            print(f"   Duration range: {bin_start:.1f} - {bin_end:.1f} seconds")
+            print(f"   Duration range: {bin_start/60:.1f} - {bin_end/60:.1f} minutes")
+            print(f"   Bin center: {bin_center:.1f} seconds ({bin_center/60:.1f} minutes)")
+            print(f"   Number of trips: {int(bin_count):,}")
+            print(f"   Percentage of total: {(bin_count/len(duration_data))*100:.2f}%")
+
+            # Find actual trips in this duration range
+            trips_in_bin = df[(df["duration_sec"] >= bin_start) & (df["duration_sec"] < bin_end)]
+            if len(trips_in_bin) > 0:
+                print(f"   Actual trips in range: {len(trips_in_bin):,}")
+                print(f"   Average duration in bin: {trips_in_bin['duration_sec'].mean():.1f} seconds ({trips_in_bin['duration_sec'].mean()/60:.1f} minutes)")
+                print(f"   Min duration in bin: {trips_in_bin['duration_sec'].min():.1f} seconds")
+                print(f"   Max duration in bin: {trips_in_bin['duration_sec'].max():.1f} seconds")
+
+        print(f"\nDuration analysis completed using full dataset ({len(df)} rows)")
 
     return plots_created
 
 
-def main():
+def main(data_source='c'):
+    """
+    Create visualizations for Porto taxi dataset.
+
+    Args:
+        data_source (str): 'c' for cleaned data (default), 'o' for original data
+    """
     ensure_matplotlib_backend()
 
     print("=== PORTO TAXI VISUALIZATION (OPTIMIZED) ===")
 
-    # 1) Load cleaned dataset
-    print("Loading cleaned dataset...")
-    try:
-        # Try to load cleaned data first (faster)
-        df = pd.read_pickle("./data/cleaned/cleaned_porto_data.pkl")
-        print("Loaded cleaned dataset from pickle cache")
-    except FileNotFoundError:
-        # Fallback to CSV if pickle doesn't exist
+    # 1) Load dataset based on data_source parameter
+    if data_source.lower() == 'o':
+        print("Loading original dataset...")
+        df = load_porto_data(csv_path="./data/original/porto.csv", pickle_path="./data/original/porto_data.pkl", verbose=True)
+        print("Loaded original dataset")
+    else:  # default to cleaned data
+        print("Loading cleaned dataset...")
         try:
-            df = pd.read_csv("./data/cleaned/cleaned_porto_data.csv")
-            print("Loaded cleaned dataset from CSV")
-            # Convert TIMESTAMP if needed
-            if "TIMESTAMP" in df.columns and not pd.api.types.is_datetime64_any_dtype(df["TIMESTAMP"]):
-                df["TIMESTAMP"] = pd.to_datetime(df["TIMESTAMP"], unit="s", errors="coerce")
+            # Try to load cleaned data first (faster)
+            df = pd.read_pickle("./data/cleaned/cleaned_porto_data.pkl")
+            print("Loaded cleaned dataset from pickle cache")
         except FileNotFoundError:
-            print("❌ Cleaned dataset not found! Please run clean_dataset.py first.")
-            print("Falling back to original dataset...")
-            df = load_porto_data(csv_path="./data/original/porto.csv", pickle_path="./data/original/porto_data.pkl", verbose=True)
+            # Fallback to CSV if pickle doesn't exist
+            try:
+                df = pd.read_csv("./data/cleaned/cleaned_porto_data.csv")
+                print("Loaded cleaned dataset from CSV")
+                # Convert TIMESTAMP if needed
+                if "TIMESTAMP" in df.columns and not pd.api.types.is_datetime64_any_dtype(df["TIMESTAMP"]):
+                    df["TIMESTAMP"] = pd.to_datetime(df["TIMESTAMP"], unit="s", errors="coerce")
+            except FileNotFoundError:
+                print("❌ Cleaned dataset not found! Please run clean_dataset.py first.")
+                print("Falling back to original dataset...")
+                df = load_porto_data(csv_path="./data/original/porto.csv", pickle_path="./data/original/porto_data.pkl", verbose=True)
 
     print(f"Loaded dataset with {len(df)} rows and {len(df.columns)} columns")
 
@@ -222,4 +264,19 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Parse command line arguments
+    data_source = 'c'  # default to cleaned data
+
+    if len(sys.argv) > 1:
+        arg = sys.argv[1].lower()
+        if arg in ['o', 'original']:
+            data_source = 'o'
+        elif arg in ['c', 'cleaned']:
+            data_source = 'c'
+        else:
+            print("Usage: python visualize_porto.py [o|c]")
+            print("  o: Use original data")
+            print("  c: Use cleaned data (default)")
+            sys.exit(1)
+
+    main(data_source)
