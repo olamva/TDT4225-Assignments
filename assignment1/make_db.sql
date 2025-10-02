@@ -44,25 +44,29 @@ SET
 
 -- Making the smaller tables for the queries for part 2
 
+DROP TABLE IF EXISTS trip_by_taxi;
 CREATE TABLE trip_by_taxi AS
-SELECT trip_id, taci_id, call_type 
-FROM all_taxi_info
+SELECT trip_id, taxi_id, call_type
+FROM all_taxi_info;
 
-
+DROP TABLE IF EXISTS trip_journey;
 CREATE TABLE trip_journey AS
 SELECT trip_id, polyline, timestamp_
-FROM all_taxi_info
+FROM all_taxi_info;
 
-CREATE TABLE orgin_call_type_A AS
-SELECT trip_id, call_type, orgin_call
-WHERE call_type = 'A'
+DROP TABLE IF EXISTS origin_call_type_A;
+CREATE TABLE origin_call_type_A AS
+SELECT trip_id, call_type, origin_call
 FROM all_taxi_info
+WHERE call_type = 'A';
 
-CREATE TABLE orgin_call_type_B AS
-SELECT trip_id, call_type, orgin_stand
-WHERE call_type = 'B'
+DROP TABLE IF EXISTS origin_call_type_B;
+CREATE TABLE origin_call_type_B AS
+SELECT trip_id, call_type, origin_stand
 FROM all_taxi_info
+WHERE call_type = 'B';
 
+DROP TABLE IF EXISTS type_of_day;
 CREATE TABLE type_of_day AS
 SELECT day_type, trip_id
-FROM all_taxi_info
+FROM all_taxi_info;
