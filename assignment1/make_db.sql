@@ -16,8 +16,7 @@ CREATE TABLE all_taxi_info (
     KEY idx_timestamp (timestamp_)
 );
 
-
-LOAD DATA LOCAL INFILE 'cleaned_porto_data.csv'
+LOAD DATA LOCAL INFILE '/work/cleaned_porto_data.csv'
 INTO TABLE all_taxi_info
 CHARACTER SET utf8mb4
 FIELDS TERMINATED BY ',' ENCLOSED BY '"' ESCAPED BY '\\'

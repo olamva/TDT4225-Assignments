@@ -59,3 +59,15 @@ docker run --name mysql-local \
   -p 3306:3306 \
   -v "$PWD":/work \
   -d mysql:8.0
+
+
+pass på at SQL peker til riktig csv fil
+LOAD DATA LOCAL INFILE '/work/cleaned_porto_data.csv'
+
+skru på LOCAL INFILE på serveren:
+docker exec -it mysql-local mysql -uroot -psecret -e "SET GLOBAL local_infile=1;"
+
+Kjør hele sql serveren på klienten:
+docker exec -i mysql-local \
+  mysql --local-infile=1 -uroot -psecret < make_db.sql
+  
