@@ -39,3 +39,30 @@ SET
                    ELSE 0
                  END,
   polyline     = IF(JSON_VALID(@polyline), CAST(@polyline AS JSON), NULL);
+
+
+
+-- Making the smaller tables for the queries for part 2
+
+CREATE TABLE trip_by_taxi AS
+SELECT trip_id, taci_id, call_type 
+FROM all_taxi_info
+
+
+CREATE TABLE trip_journey AS
+SELECT trip_id, polyline, timestamp_
+FROM all_taxi_info
+
+CREATE TABLE orgin_call_type_A AS
+SELECT trip_id, call_type, orgin_call
+WHERE call_type = 'A'
+FROM all_taxi_info
+
+CREATE TABLE orgin_call_type_B AS
+SELECT trip_id, call_type, orgin_stand
+WHERE call_type = 'B'
+FROM all_taxi_info
+
+CREATE TABLE type_of_day AS
+SELECT day_type, trip_id
+FROM all_taxi_info
