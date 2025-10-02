@@ -45,3 +45,17 @@ To connect to the MySQL server using the command line interface, run:
 ```bash
 docker exec -it mysql-local mysql -u root -psecret
 ```
+
+
+
+for å sette opp db til part 2:
+
+for å laste make_db.sql og cleaned_porto_dat.csv inn i dokeren:
+
+docker rm -f mysql-local 2>/dev/null || true
+
+docker run --name mysql-local \
+  -e MYSQL_ROOT_PASSWORD=secret \
+  -p 3306:3306 \
+  -v "$PWD":/work \
+  -d mysql:8.0

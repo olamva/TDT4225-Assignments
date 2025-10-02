@@ -1,3 +1,5 @@
+CREATE DATABASE IF NOT EXISTS porto;
+USE porto;
 DROP TABLE IF EXISTS all_taxi_info;
 
 CREATE TABLE all_taxi_info (
