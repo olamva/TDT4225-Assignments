@@ -21,6 +21,11 @@ Then set up the local MySQL server using Docker:
 docker run --name mysql-local -e MYSQL_ROOT_PASSWORD=secret -p 3306:3306 -d mysql:8.0
 ```
 
+how to conect to the MySQL server later:
+```bash
+docker exec -it mysql-local mysql -uroot -p
+```
+
 Then run the database setup script to create the database:
 
 ```bash
