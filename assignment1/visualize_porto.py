@@ -1,4 +1,4 @@
-# visualize_porto_optimized.py
+# visualize_porto.py
 # Optimized version of Porto Taxi visualization with significant performance improvements
 
 import os
