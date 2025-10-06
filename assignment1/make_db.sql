@@ -17,6 +17,7 @@ CREATE TABLE all_taxi_info (
 );
 
 LOAD DATA LOCAL INFILE '/work/cleaned_porto_data.csv'
+
 INTO TABLE all_taxi_info
 CHARACTER SET utf8mb4
 FIELDS TERMINATED BY ',' ENCLOSED BY '"' ESCAPED BY '\\'
