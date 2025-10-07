@@ -1,7 +1,8 @@
 import re
 
 import pandas as pd
-from data_loader import load_porto_data
+
+from utils.data_loader import load_porto_data
 
 
 def fast_parse_polyline_len(s):

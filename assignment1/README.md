@@ -2,7 +2,7 @@
 
 ## Setup Instructions
 
-Recommend to setup .venv locally and activate it:
+First, create a Python virtual environment and activate it:
 
 ```bash
 python3 -m venv .venv
@@ -15,115 +15,92 @@ Download the required packages from the requirements.txt file using pip:
 pip install -r requirements.txt
 ```
 
-Then set up the local MySQL server using Docker:
+First, ensure you have the dataset downloaded locally, and move it to `data/original`. Then, run the following script to preprocess the data:
 
 ```bash
-docker run --name mysql-local -e MYSQL_ROOT_PASSWORD=secret -p 3306:3306 -d mysql:8.0
+python clean_dataset.py
 ```
 
-how to conect to the MySQL server later:
-```bash
-docker exec -it mysql-local mysql -uroot -p
-```
-
-Then run the database setup script to create the database:
+Then set up the local MySQL server using Docker (if the container already exists, ignore this step):
 
 ```bash
-python3 setup_database.py
+docker run -d --name mysql-local \
+  -e MYSQL_ROOT_PASSWORD=secret \
+  -v "$(pwd):/work" \
+  -p 3306:3306 \
+  mysql:8.0 --local-infile=1
 ```
 
-Then run the example program:
+Run the make_db.sql script to load the CSV data into the database (this will take a while):
 
 ```bash
-python3 example.py
+docker exec -i mysql-local \
+  mysql --local-infile=1 -uroot -psecret -e "source /work/make_db.sql"
 ```
 
-## Connecting to DB in MySQL CLI
-
-To connect to the MySQL server using the command line interface, run:
+To connect to the MySQL server and check that the database was created, run the following in a different terminal:
 
 ```bash
 docker exec -it mysql-local mysql -u root -psecret
 ```
 
+Now you are free to execute SQL commands. Here's an example input to check things worked:
 
+```sql
+USE porto;
+SELECT COUNT(*) FROM all_taxi_info;
+```
 
-for å sette opp db til part 2:
+Whenever you want to disconnect from the MySQL CLI, input the following:
 
-starte SQL med docker:
-(første gang du kjører):
+```sql
+EXIT;
+```
 
-docker run --name mysql-local \
-  -e MYSQL_ROOT_PASSWORD=secret \
-  -p 3306:3306 \
-  -v "$PWD":/work \
-  -d mysql:8.0 --local-infile=ON
+### Troubleshooting
 
-Hvis du har kjørt den før men vil starte fresh:
-docker rm -f mysql-local 2>/dev/null || true
-docker volume prune -f  # optional, removes all unused volumes
+If you need to re-initialize the database, you can stop and remove the Docker container with:
 
-så kjør:
+```bash
+docker stop mysql-local && docker rm mysql-local
+```
 
-docker run --name mysql-local \
-  -e MYSQL_ROOT_PASSWORD=secret \
-  -p 3306:3306 \
-  -v "$PWD":/work \
-  -d mysql:8.0 --local-infile=ON
+## Part 1
 
+To fetch the figures:
 
-  koble til MySQL Server:
-  docker exec -it mysql-local mysql -uroot -psecret
+```bash
+python visualize_porto.py
+```
 
+> The figures will be output to the `figures/` directory.
 
-sett opp test database:
-python3 setup_database.py
+To run an EDA:
 
-så:
+```bash
+python eda.py
+```
 
-python3 example.py
+## Part 2
 
-sett opp database for part 2:
-docker exec -it mysql-local mysql -uroot -psecret -e "SET GLOBAL local_infile = 1;"
-
-
-kjør så sql scriptet:
-
-docker exec -i mysql-local \
-  mysql --local-infile=1 -uroot -psecret < make_db.sql
-
-
-sjekk at de importerte tabellen er der:
-docker exec -it mysql-local mysql -uroot -psecret -e "SELECT COUNT(*) FROM porto.all_taxi_info;"
-
-
-(valgfrit) for å fjerne alle stoppede og ubrukte volumer:
-docker system prune -f
-docker volume prune -f
-
-
-
-<!--  gammel info:
-
-for å laste make_db.sql og cleaned_porto_dat.csv inn i dokeren:
-
-docker rm -f mysql-local 2>/dev/null || true
-
-docker run --name mysql-local \
-  -e MYSQL_ROOT_PASSWORD=secret \
-  -p 3306:3306 \
-  -v "$PWD":/work \
-  -d mysql:8.0 --local-infile=ON
-
-
-pass på at SQL peker til riktig csv fil
-LOAD DATA LOCAL INFILE '/work/cleaned_porto_data.csv'
-
-
-skru på LOCAL INFILE på serveren:
-docker exec -it mysql-local mysql -uroot -psecret -e "SET GLOBAL local_infile=1;"
-
-Kjør hele sql serveren på klienten:
-docker exec -i mysql-local \
-  mysql --local-infile=1 -uroot -psecret < make_db.sql
-   -->
+1. **How many taxis, trips, and total GPS points are there?**
+2. **What is the average number of trips per taxi?**
+3. **List the top 20 taxis with the most trips.**
+4. **a) What is the most used call type per taxi?**
+   **b) For each call type, compute the average trip duration and distance, and also
+   report the share of trips starting in four time bands: 00-06, 06-12, 12-18, and
+   18-24.**
+5. **Find the taxis with the most total hours driven as well as total distance driven.
+   List them in order of total hours.**
+6. **Find the trips that passed within 100 m of Porto City Hall.
+   (longitude, latitude) = (-8.62911, 41.15794)**
+7. **Identify the number of invalid trips. An invalid trip is defined as a trip with fewer
+   than 3 GPS points.**
+8. **Find pairs of different taxis that were within 5m and within 5 seconds of each
+   other at least once.**
+9. **Find the trips that started on one calendar day and ended on the next (midnight
+   crossers).**
+10. **Find the trips whose start and end points are within 50 m of each other (circular
+    trips).**
+11. **For each taxi, compute the average idle time between consecutive trips. List the
+    top 20 taxis with the highest average idle time.**

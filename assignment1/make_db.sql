@@ -4,19 +4,19 @@ DROP TABLE IF EXISTS all_taxi_info;
 
 CREATE TABLE all_taxi_info (
     trip_id        INT,
-    call_type      CHAR(1),              
-    origin_call    INT NULL,             
-    origin_stand   INT NULL,             
+    call_type      CHAR(1),
+    origin_call    INT NULL,
+    origin_stand   INT NULL,
     taxi_id        INT,
-    timestamp_     DATETIME,             
-    day_type       CHAR(1),              
-    missing_data   BOOLEAN,           
-    polyline       JSON,                 
+    timestamp_     DATETIME,
+    day_type       CHAR(1),
+    missing_data   BOOLEAN,
+    polyline       JSON,
     KEY idx_taxi_id (taxi_id),
     KEY idx_timestamp (timestamp_)
 );
 
-LOAD DATA LOCAL INFILE '/work/cleaned_porto_data.csv'
+LOAD DATA LOCAL INFILE '/work/data/cleaned/cleaned_porto_data.csv'
 
 INTO TABLE all_taxi_info
 CHARACTER SET utf8mb4

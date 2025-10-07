@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-from data_loader import get_missing_data_rows, load_porto_data
+
+from utils.data_loader import get_missing_data_rows, load_porto_data
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', None)

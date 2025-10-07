@@ -7,7 +7,8 @@ import sys
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from data_loader import load_porto_data
+
+from utils.data_loader import load_porto_data
 
 
 def ensure_matplotlib_backend():

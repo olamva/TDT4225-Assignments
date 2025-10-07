@@ -1,4 +1,4 @@
-from DbConnector import DbConnector
+from utils.DbConnector import DbConnector
 
 db = DbConnector(HOST="localhost",
                  DATABASE="porto",
