@@ -15,10 +15,16 @@ Download the required packages from the requirements.txt file using pip:
 pip install -r requirements.txt
 ```
 
-First, ensure you have the dataset downloaded locally, and move it to `data/original`. Then, run the following script to preprocess the data:
+First, ensure you have the dataset downloaded locally, and move it to `data/original`. Then, create the cleaned data directory:
 
 ```bash
-python clean_dataset.py
+mkdir -p data/cleaned
+```
+
+Then, run the following script to preprocess the data:
+
+```bash
+python3 clean_dataset.py
 ```
 
 > This will create a cleaned CSV file at `data/cleaned/cleaned_porto_data.csv` and a pickle file at `data/cleaned/cleaned_porto_data.pkl`.
@@ -78,7 +84,7 @@ docker stop mysql-local && docker rm mysql-local
 To fetch the figures:
 
 ```bash
-python visualize_porto.py
+python3 visualize_porto.py
 ```
 
 > The figures will be output to the `figures/` directory.
@@ -86,7 +92,7 @@ python visualize_porto.py
 To run an EDA:
 
 ```bash
-python eda.py
+python3 eda.py
 ```
 
 ## Part 2
