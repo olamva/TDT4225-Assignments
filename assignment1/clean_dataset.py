@@ -30,7 +30,7 @@ def find_global_min_max_days():
     """
     # Load the data
     print("Loading Porto taxi data to find global min/max days...")
-    df = load_porto_data(csv_path="porto.csv", pickle_path="porto_data.pkl", verbose=True)
+    df = load_porto_data(csv_path="data/original/porto.csv", pickle_path="data/original/porto_data.pkl", verbose=True)
 
     # Convert TIMESTAMP to datetime if needed
     if "TIMESTAMP" in df.columns and not pd.api.types.is_datetime64_any_dtype(df["TIMESTAMP"]):
@@ -52,7 +52,7 @@ def find_global_min_max_days():
     return min_day["date"], max_day["date"], min_day["trip_count"], max_day["trip_count"]
 
 
-def clean_dataset(save_to_file=True, output_csv="cleaned_porto_data.csv", output_pickle="cleaned_porto_data.pkl"):
+def clean_dataset(save_to_file=True, output_csv="data/cleaned/cleaned_porto_data.csv", output_pickle="data/cleaned/cleaned_porto_data.pkl"):
     """
     Remove rows with missing data, rows from global min/max trip days, and short duration trips (≤ 30 seconds).
 
@@ -68,7 +68,7 @@ def clean_dataset(save_to_file=True, output_csv="cleaned_porto_data.csv", output
 
     # Load the original data
     print("Loading original dataset...")
-    df = load_porto_data(csv_path="porto.csv", pickle_path="porto_data.pkl", verbose=True)
+    df = load_porto_data(csv_path="data/original/porto.csv", pickle_path="data/original/porto_data.pkl", verbose=True)
 
     original_rows = len(df)
     print(f"Original dataset: {original_rows:,} rows")
@@ -220,7 +220,7 @@ def validate_cleaning(cleaned_df=None):
     if cleaned_df is None:
         # Try to load cleaned data
         try:
-            cleaned_df = pd.read_pickle("cleaned_porto_data.pkl")
+            cleaned_df = pd.read_pickle("data/cleaned/cleaned_porto_data.pkl")
         except FileNotFoundError:
             print("Cleaned dataset not found. Run clean_dataset() first.")
             return None

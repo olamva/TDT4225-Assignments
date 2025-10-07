@@ -21,6 +21,8 @@ First, ensure you have the dataset downloaded locally, and move it to `data/orig
 python clean_dataset.py
 ```
 
+> This will create a cleaned CSV file at `data/cleaned/cleaned_porto_data.csv` and a pickle file at `data/cleaned/cleaned_porto_data.pkl`.
+
 Then set up the local MySQL server using Docker (if the container already exists, ignore this step):
 
 ```bash
