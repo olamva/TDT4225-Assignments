@@ -33,6 +33,12 @@ docker run -d --name mysql-local \
   mysql:8.0 --local-infile=1
 ```
 
+For sepanta:
+
+```bash
+docker run -d --name mysql-local -e MYSQL_ROOT_PASSWORD=secret -v "C:/Users/sep_j/TDT4225/TDT4225-Assignments/assignment1:/work" -p 3306:3306 mysql:8.0 --local-infile=1
+```
+
 Run the make_db.sql script to load the CSV data into the database (this will take a while):
 
 ```bash
