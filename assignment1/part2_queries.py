@@ -17,7 +17,7 @@ def total_taxis_trips_GPS_points():
     sql = """
     SELECT
       (SELECT COUNT(DISTINCT taxi_id) FROM trip_by_taxi) AS Number_of_taxis,
-      (SELECT COUNT(DISTINCT trip_id)  FROM trip_by_taxi)AS Number_of_trips,
+      (SELECT COUNT(DISTINCT trip_id) FROM trip_by_taxi)AS Number_of_trips,
       (SELECT COALESCE(SUM(JSON_LENGTH(polyline)), 0) FROM trip_journey
          WHERE polyline IS NOT NULL) AS Number_of_GPS_points
     """
@@ -29,19 +29,26 @@ def total_taxis_trips_GPS_points():
     return {
         "Number_of_taxis": taxis,
         "Number_of_trips": trips,
-        "Number_of_GPS_points": gps_points
+        "Number_of_GPS_points": int(gps_points) if gps_points is not None else 0
     }
 
 
 # 2. What is the average number of trips per taxi?
-def average_trips_per_day():
-    sql = """ 
-    SELECT AVG()
-    FROM trip_journey
-    GROUP BY 
-    WHERE
-    
+def average_trips_per_taxi():
+    sql = """
+    SELECT AVG(trip_count) AS average_trips_per_taxi
+    FROM (
+        SELECT taxi_id, COUNT(trip_id) AS trip_count
+        FROM trip_by_taxi
+        GROUP BY taxi_id
+    ) AS taxi_trip_counts
     """
+
+    cur = conn.cursor()
+    cur.execute(sql)
+    result = cur.fetchone()[0]
+    cur.close()
+    return float(result) if result is not None else 0.0
 
 # 3. List the top 20 taxis with the most trips.
 
@@ -67,4 +74,10 @@ def average_trips_per_day():
 
 
 def answers_part2():
-    print(total_taxis_trips_GPS_points())
+    print("1. Taxis, trips, and GPS points:", total_taxis_trips_GPS_points())
+    print("2. Average trips per taxi:", average_trips_per_taxi())
+
+
+if __name__ == "__main__":
+    answers_part2()
+    conn.close()

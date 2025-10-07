@@ -101,20 +101,11 @@ python3 eda.py
 2. **What is the average number of trips per taxi?**
 3. **List the top 20 taxis with the most trips.**
 4. **a) What is the most used call type per taxi?**
-   **b) For each call type, compute the average trip duration and distance, and also
-   report the share of trips starting in four time bands: 00-06, 06-12, 12-18, and
-   18-24.**
-5. **Find the taxis with the most total hours driven as well as total distance driven.
-   List them in order of total hours.**
-6. **Find the trips that passed within 100 m of Porto City Hall.
-   (longitude, latitude) = (-8.62911, 41.15794)**
-7. **Identify the number of invalid trips. An invalid trip is defined as a trip with fewer
-   than 3 GPS points.**
-8. **Find pairs of different taxis that were within 5m and within 5 seconds of each
-   other at least once.**
-9. **Find the trips that started on one calendar day and ended on the next (midnight
-   crossers).**
-10. **Find the trips whose start and end points are within 50 m of each other (circular
-    trips).**
-11. **For each taxi, compute the average idle time between consecutive trips. List the
-    top 20 taxis with the highest average idle time.**
+   **b) For each call type, compute the average trip duration and distance, and alsoreport the share of trips starting in four time bands: 00-06, 06-12, 12-18, and 18-24.**
+5. **Find the taxis with the most total hours driven as well as total distance driven. List them in order of total hours.**
+6. **Find the trips that passed within 100 m of Porto City Hall. (longitude, latitude) = (-8.62911, 41.15794)**
+7. **Identify the number of invalid trips. An invalid trip is defined as a trip with fewer than 3 GPS points.**
+8. **Find pairs of different taxis that were within 5m and within 5 seconds of each other at least once.**
+9. **Find the trips that started on one calendar day and ended on the next (midnight crossers).**
+10. **Find the trips whose start and end points are within 50 m of each other (circular trips).**
+11. **For each taxi, compute the average idle time between consecutive trips. List the top 20 taxis with the highest average idle time.**

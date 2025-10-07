@@ -3,7 +3,7 @@ USE porto;
 DROP TABLE IF EXISTS all_taxi_info;
 
 CREATE TABLE all_taxi_info (
-    trip_id        INT,
+    trip_id        BIGINT UNSIGNED,
     call_type      CHAR(1),
     origin_call    INT NULL,
     origin_stand   INT NULL,
@@ -25,7 +25,7 @@ LINES TERMINATED BY '\n'
 IGNORE 1 LINES
 (@trip_id, @call_type, @origin_call, @origin_stand, @taxi_id, @ts, @day_type, @missing_data, @polyline)
 SET
-  trip_id      = NULLIF(@trip_id,''),
+  trip_id      = CAST(NULLIF(@trip_id,'') AS UNSIGNED),
   call_type    = NULLIF(@call_type,''),
   origin_call  = NULLIF(@origin_call,''),
   origin_stand = NULLIF(@origin_stand,''),
