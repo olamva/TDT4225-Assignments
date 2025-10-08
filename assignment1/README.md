@@ -97,6 +97,24 @@ python3 eda.py
 
 ## Part 2
 
+To run the queries in part 2, use the following commands:
+
+```bash
+cd part2
+```
+
+SQL files (query1 as example):
+
+```bash
+docker exec -i mysql-local mysql -u root -psecret porto < query1.sql
+```
+
+Python files (query4b as example):
+
+```bash
+python3 query4b.py
+```
+
 1. **How many taxis, trips, and total GPS points are there?**
 2. **What is the average number of trips per taxi?**
 3. **List the top 20 taxis with the most trips.**
