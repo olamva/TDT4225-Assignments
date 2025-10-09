@@ -1,5 +1,3 @@
-from datetime import datetime
-
 import mysql.connector
 
 # Query 11: For each taxi, compute the average idle time between consecutive trips
@@ -11,16 +9,16 @@ def query11():
     )
 
     # Get all trips with their timestamps, ordered by taxi and time
+    # Extract timestamp from trip_id and calculate end time based on GPS points
     sql = """
     SELECT
-        t.taxi_id,
-        t.trip_id,
-        j.timestamp_,
-        JSON_LENGTH(j.polyline) * 15 AS estimated_duration_seconds
-    FROM trip_by_taxi t
-    JOIN trip_journey j ON t.trip_id = j.trip_id
-    WHERE j.timestamp_ IS NOT NULL AND j.polyline IS NOT NULL
-    ORDER BY t.taxi_id, j.timestamp_
+        taxi_id,
+        trip_id,
+        FROM_UNIXTIME(LEFT(trip_id, 10)) AS start_time,
+        DATE_ADD(FROM_UNIXTIME(LEFT(trip_id, 10)), INTERVAL (JSON_LENGTH(polyline) * 15) SECOND) AS end_time
+    FROM all_taxi_info
+    WHERE polyline IS NOT NULL AND JSON_LENGTH(polyline) > 0
+    ORDER BY taxi_id, trip_id
     """
 
     cur = conn.cursor()
@@ -29,14 +27,13 @@ def query11():
     taxi_trips = {}
 
     # Group trips by taxi
-    for taxi_id, trip_id, timestamp, duration in cur:
+    for taxi_id, trip_id, start_time, end_time in cur:
         if taxi_id not in taxi_trips:
             taxi_trips[taxi_id] = []
 
-        end_time = timestamp.timestamp() + duration
         taxi_trips[taxi_id].append({
             'trip_id': trip_id,
-            'start_time': timestamp.timestamp(),
+            'start_time': start_time,
             'end_time': end_time
         })
 
@@ -56,7 +53,8 @@ def query11():
             current_trip_end = trips[i]['end_time']
             next_trip_start = trips[i + 1]['start_time']
 
-            idle_time = next_trip_start - current_trip_end
+            # Calculate idle time in seconds
+            idle_time = (next_trip_start - current_trip_end).total_seconds()
 
             # Only consider positive idle times (negative would mean overlapping trips)
             if idle_time > 0:

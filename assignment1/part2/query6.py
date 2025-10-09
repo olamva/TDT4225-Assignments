@@ -31,7 +31,7 @@ def query6():
 
     sql = """
     SELECT trip_id, polyline
-    FROM trip_journey
+    FROM all_taxi_info
     WHERE polyline IS NOT NULL
     """
 
@@ -67,9 +67,23 @@ def query6():
 
 if __name__ == "__main__":
     results = query6()
+
+    # Save to JSON file
+    results_file = "results/query6_final_results.json"
+    with open(results_file, 'w') as f:
+        json.dump({
+            'query': 'Find trips that passed within 100m of Porto City Hall',
+            'porto_city_hall_coordinates': {'latitude': 41.15794, 'longitude': -8.62911},
+            'max_distance_meters': 100,
+            'total_trips_found': len(results),
+            'trip_ids': results
+        }, f, indent=2)
+
     print(f"Number of trips that passed within 100m of Porto City Hall: {len(results)}")
     print("Trip IDs:")
     for trip_id in results[:10]:  # Show first 10
         print(f"  {trip_id}")
     if len(results) > 10:
         print(f"  ... and {len(results) - 10} more")
+
+    print(f"\nResults saved to {results_file}")

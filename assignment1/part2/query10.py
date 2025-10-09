@@ -25,7 +25,7 @@ def query10():
 
     sql = """
     SELECT trip_id, polyline
-    FROM trip_journey
+    FROM all_taxi_info
     WHERE polyline IS NOT NULL
     """
 
@@ -70,6 +70,17 @@ def query10():
 
 if __name__ == "__main__":
     results = query10()
+
+    # Save to JSON file
+    results_file = "results/query10_final_results.json"
+    with open(results_file, 'w') as f:
+        json.dump({
+            'query': 'Find trips whose start and end points are within 50m of each other (circular trips)',
+            'max_distance_meters': 50,
+            'total_circular_trips': len(results),
+            'results': results
+        }, f, indent=2)
+
     print(f"Found {len(results)} circular trips (start and end within 50m):")
     print("Trip ID | Distance (m) | Start Point | End Point")
     print("-" * 70)
@@ -77,3 +88,5 @@ if __name__ == "__main__":
         print(f"{trip['trip_id']:7} | {trip['start_end_distance']:11.2f} | {trip['start_point']} | {trip['end_point']}")
     if len(results) > 20:
         print(f"... and {len(results) - 20} more trips")
+
+    print(f"\nResults saved to {results_file}")
