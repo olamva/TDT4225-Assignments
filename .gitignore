@@ -4,3 +4,4 @@ __pycache__/
 *.csv
 *.pkl
 figures/
+*final_results.json
