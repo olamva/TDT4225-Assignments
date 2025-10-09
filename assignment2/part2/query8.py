@@ -470,7 +470,7 @@ def query8_multithreaded():
     start_time = time.time()
     last_save_time = start_time
     last_cleanup_time = start_time
-    save_interval = 300  # Save every 5 minutes
+    save_interval = 15 * 60  # Save every 15 minutes
     cleanup_interval = 600  # Cleanup old spatial index data every 10 minutes
 
     print(f"⚙️  Configuration:")
