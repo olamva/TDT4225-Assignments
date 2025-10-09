@@ -133,7 +133,7 @@ def create_duration_plot(df, outdir):
         df["duration_sec"] = (df["poly_len"].clip(lower=1) - 1) * 15
 
         # Filter out extreme values for cleaner visualization
-        cutoff = df["duration_sec"]
+        cutoff = df["duration_sec"].quantile(0.95)
         duration_data = df.loc[df["duration_sec"] <= cutoff, "duration_sec"]
 
         # Create histogram and analyze bins
