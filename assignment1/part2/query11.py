@@ -1,15 +1,11 @@
 import mysql.connector
 
-# Query 11: For each taxi, compute the average idle time between consecutive trips
-# List the top 20 taxis with the highest average idle time
 
 def query11():
     conn = mysql.connector.connect(
         host="127.0.0.1", port=3306, user="root", password="secret", database="porto"
     )
 
-    # Get all trips with their timestamps, ordered by taxi and time
-    # Extract timestamp from trip_id and calculate end time based on GPS points
     sql = """
     SELECT
         taxi_id,
@@ -26,7 +22,6 @@ def query11():
 
     taxi_trips = {}
 
-    # Group trips by taxi
     for taxi_id, trip_id, start_time, end_time in cur:
         if taxi_id not in taxi_trips:
             taxi_trips[taxi_id] = []
@@ -40,11 +35,10 @@ def query11():
     cur.close()
     conn.close()
 
-    # Calculate idle times for each taxi
     taxi_idle_stats = {}
 
     for taxi_id, trips in taxi_trips.items():
-        if len(trips) < 2:  # Need at least 2 trips to calculate idle time
+        if len(trips) < 2:
             continue
 
         idle_times = []
@@ -53,10 +47,8 @@ def query11():
             current_trip_end = trips[i]['end_time']
             next_trip_start = trips[i + 1]['start_time']
 
-            # Calculate idle time in seconds
             idle_time = (next_trip_start - current_trip_end).total_seconds()
 
-            # Only consider positive idle times (negative would mean overlapping trips)
             if idle_time > 0:
                 idle_times.append(idle_time)
 
@@ -69,7 +61,6 @@ def query11():
                 'total_trips': len(trips)
             }
 
-    # Sort by average idle time (descending)
     sorted_taxis = sorted(taxi_idle_stats.items(), key=lambda x: x[1]['avg_idle_seconds'], reverse=True)
 
     return sorted_taxis
@@ -81,6 +72,3 @@ if __name__ == "__main__":
     print("-" * 65)
     for taxi_id, stats in results[:20]:
         print(f"{taxi_id:7} | {stats['avg_idle_hours']:18.2f} | {stats['num_idle_periods']:12} | {stats['total_trips']:11}")
-
-    if len(results) > 20:
-        print(f"\n... and {len(results) - 20} more taxis")

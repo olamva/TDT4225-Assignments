@@ -1,9 +1,7 @@
 import json
-from datetime import datetime
 
 import mysql.connector
 
-# Query 9: Find trips that started on one calendar day and ended on the next (midnight crossers)
 
 def query9():
     conn = mysql.connector.connect(
@@ -48,7 +46,6 @@ def query9():
 if __name__ == "__main__":
     results = query9()
 
-    # Save to JSON file
     results_file = "results/query9_final_results.json"
     with open(results_file, 'w') as f:
         json.dump({
@@ -61,10 +58,5 @@ if __name__ == "__main__":
     print("Trip ID | Taxi ID | Start Time | End Time | GPS Points")
     print("-" * 80)
 
-    for result in results[:20]:  # Show first 20
+    for result in results[:20]:
         print(f"{result['trip_id']} | {result['taxi_id']} | {result['start_time']} | {result['estimated_end_time']} | {result['num_gps_points']}")
-
-    if len(results) > 20:
-        print(f"... and {len(results) - 20} more trips")
-
-    print(f"\nResults saved to {results_file}")

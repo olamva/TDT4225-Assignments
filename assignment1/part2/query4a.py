@@ -2,7 +2,6 @@ import json
 
 import mysql.connector
 
-# Query 4a: What is the most used call type per taxi?
 
 def query4a():
     conn = mysql.connector.connect(
@@ -46,7 +45,6 @@ def query4a():
 if __name__ == "__main__":
     results = query4a()
 
-    # Save to JSON file
     results_file = "results/query4a_final_results.json"
     with open(results_file, 'w') as f:
         json.dump({
@@ -60,10 +58,5 @@ if __name__ == "__main__":
     print("Taxi ID | Most Used Call Type | Count")
     print("-" * 40)
 
-    for result in results[:20]:  # Show first 20
+    for result in results[:20]:
         print(f"{result['taxi_id']:7} | {result['most_used_call_type']:18} | {result['call_count']:5}")
-
-    if len(results) > 20:
-        print(f"... and {len(results) - 20} more taxis")
-
-    print(f"\nResults saved to {results_file}")

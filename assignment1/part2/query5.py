@@ -1,13 +1,9 @@
 import json
-from datetime import datetime
 
 import mysql.connector
 
-# Query 5: Find taxis with most total hours driven and total distance driven
-# List them in order of total hours
 
 def calculate_distance(polyline):
-    """Calculate distance using Haversine formula"""
     if not polyline or len(polyline) < 2:
         return 0
 
@@ -59,11 +55,9 @@ def query5():
         try:
             polyline = json.loads(polyline_json) if isinstance(polyline_json, str) else polyline_json
 
-            # Calculate duration (assume 15 seconds between GPS points)
             duration_seconds = len(polyline) * 15 if polyline else 0
             duration_hours = duration_seconds / 3600
 
-            # Calculate distance
             distance = calculate_distance(polyline)
 
             taxi_stats[taxi_id]['total_hours'] += duration_hours
@@ -75,7 +69,6 @@ def query5():
     cur.close()
     conn.close()
 
-    # Sort by total hours (descending)
     sorted_taxis = sorted(taxi_stats.items(), key=lambda x: x[1]['total_hours'], reverse=True)
 
     return sorted_taxis

@@ -1,13 +1,9 @@
 import json
-from datetime import datetime
 
 import mysql.connector
 
-# Query 4b: For each call type, compute average trip duration and distance,
-# and share of trips starting in time bands: 00-06, 06-12, 12-18, 18-24
 
 def calculate_distance(polyline):
-    """Calculate distance using Haversine formula"""
     if not polyline or len(polyline) < 2:
         return 0
 
@@ -61,7 +57,7 @@ def query4b():
 
     call_type_data = {}
 
-    for call_type, trip_id, polyline_json, start_hour in cur:
+    for call_type, _, polyline_json, start_hour in cur:
         if call_type not in call_type_data:
             call_type_data[call_type] = {
                 'durations': [],
@@ -70,17 +66,13 @@ def query4b():
                 'total_trips': 0
             }
 
-        # Parse polyline
         try:
             polyline = json.loads(polyline_json) if isinstance(polyline_json, str) else polyline_json
 
-            # Calculate duration (assume 15 seconds between GPS points)
             duration = len(polyline) * 15 if polyline else 0
 
-            # Calculate distance
             distance = calculate_distance(polyline)
 
-            # Determine time band
             if 0 <= start_hour < 6:
                 time_band = '00-06'
             elif 6 <= start_hour < 12:
@@ -101,7 +93,6 @@ def query4b():
     cur.close()
     conn.close()
 
-    # Calculate results
     results = {}
     for call_type, data in call_type_data.items():
         total_trips = data['total_trips']

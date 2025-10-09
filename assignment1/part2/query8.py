@@ -12,9 +12,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import mysql.connector
 
-# Query 8 ULTRA-OPTIMIZED WITH MULTITHREADING: Find pairs of different taxis that were within 5m and within 5 seconds
-# of each other at least once
-# Features: Interactive controls, progress saving, memory optimization, spatial indexing, multithreading
 
 class InteractiveController:
     """Handles keyboard input and controls during processing"""
@@ -259,7 +256,6 @@ def fast_distance_check(lat1, lon1, lat2, lon2, max_distance=5):
     return (lat_m * lat_m + lon_m * lon_m) <= (max_distance * max_distance)
 
 def haversine_distance(lat1, lon1, lat2, lon2):
-    """Calculate distance between two points using Haversine formula"""
     R = 6371000  # Earth radius in meters
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
@@ -271,7 +267,7 @@ def haversine_distance(lat1, lon1, lat2, lon2):
 
     return R * c
 
-def save_progress(close_pairs, processed_points, total_points, filename="query8_progress.pkl"):
+def save_progress(close_pairs, processed_points, total_points, filename="query8_progres.pkl"):
     """Save current progress to file"""
     progress = {
         'close_pairs': list(close_pairs),
@@ -283,7 +279,7 @@ def save_progress(close_pairs, processed_points, total_points, filename="query8_
         pickle.dump(progress, f)
     print(f"\n>>> Progress saved to {filename} <<<")
 
-def load_progress(filename="query8_progress.pkl"):
+def load_progress(filename="query8_progres.pkl"):
     """Load previous progress from file"""
     try:
         with open(filename, 'rb') as f:
@@ -323,7 +319,7 @@ def query8_multithreaded():
             print(f"✅ All {progress['total_points']:,} points were processed")
 
             # Save results to human-readable JSON
-            results_file = "query8_final_results.json"
+            results_file = "results/query8_final_results.json"
 
             # Convert pair strings back to proper format for JSON
             formatted_pairs = []
@@ -359,8 +355,6 @@ def query8_multithreaded():
             sample_pairs = list(progress['close_pairs'])[:10]
             for i, pair_str in enumerate(sample_pairs):
                 print(f"   {i+1:2d}. {pair_str}")
-            if len(progress['close_pairs']) > 10:
-                print(f"   ... and {len(progress['close_pairs'])-10:,} more pairs")
 
             print(f"\n✅ Query 8 analysis complete!")
             print(f"📁 Full results available in {results_file}")
@@ -751,7 +745,7 @@ if __name__ == "__main__":
             print(f"❌ No taxi pairs found within the specified criteria")
 
         # Save final results
-        results_file = "query8_final_results.json"
+        results_file = "results/query8_final_results.json"
         with open(results_file, "w") as f:
             json.dump({
                 'pairs': results,

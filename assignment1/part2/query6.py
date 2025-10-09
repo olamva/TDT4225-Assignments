@@ -3,11 +3,8 @@ import math
 
 import mysql.connector
 
-# Query 6: Find trips that passed within 100m of Porto City Hall
-# (longitude, latitude) = (-8.62911, 41.15794)
 
 def haversine_distance(lat1, lon1, lat2, lon2):
-    """Calculate distance between two points using Haversine formula"""
     R = 6371000  # Earth radius in meters
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
@@ -27,7 +24,7 @@ def query6():
     # Porto City Hall coordinates
     city_hall_lat = 41.15794
     city_hall_lon = -8.62911
-    max_distance = 100  # 100 meters
+    max_distance_meters = 100
 
     sql = """
     SELECT trip_id, polyline
@@ -47,15 +44,14 @@ def query6():
             if not polyline:
                 continue
 
-            # Check each GPS point in the trip
             for point in polyline:
                 if len(point) >= 2:
                     lon, lat = point[0], point[1]
                     distance = haversine_distance(lat, lon, city_hall_lat, city_hall_lon)
 
-                    if distance <= max_distance:
+                    if distance <= max_distance_meters:
                         trips_near_city_hall.append(trip_id)
-                        break  # Found one point close enough, no need to check others
+                        break
 
         except (json.JSONDecodeError, TypeError, IndexError):
             continue
@@ -68,7 +64,6 @@ def query6():
 if __name__ == "__main__":
     results = query6()
 
-    # Save to JSON file
     results_file = "results/query6_final_results.json"
     with open(results_file, 'w') as f:
         json.dump({
@@ -83,7 +78,3 @@ if __name__ == "__main__":
     print("Trip IDs:")
     for trip_id in results[:10]:  # Show first 10
         print(f"  {trip_id}")
-    if len(results) > 10:
-        print(f"  ... and {len(results) - 10} more")
-
-    print(f"\nResults saved to {results_file}")

@@ -3,10 +3,8 @@ import math
 
 import mysql.connector
 
-# Query 10: Find trips whose start and end points are within 50m of each other (circular trips)
 
 def haversine_distance(lat1, lon1, lat2, lon2):
-    """Calculate distance between two points using Haversine formula"""
     R = 6371000  # Earth radius in meters
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
@@ -33,7 +31,7 @@ def query10():
     cur.execute(sql)
 
     circular_trips = []
-    max_distance = 50  # 50 meters
+    max_distance_meters = 50
 
     for trip_id, polyline_json in cur:
         try:
@@ -42,7 +40,6 @@ def query10():
             if not polyline or len(polyline) < 2:
                 continue
 
-            # Get start and end points
             start_point = polyline[0]
             end_point = polyline[-1]
 
@@ -52,7 +49,7 @@ def query10():
 
                 distance = haversine_distance(start_lat, start_lon, end_lat, end_lon)
 
-                if distance <= max_distance:
+                if distance <= max_distance_meters:
                     circular_trips.append({
                         'trip_id': trip_id,
                         'start_end_distance': distance,
@@ -71,7 +68,6 @@ def query10():
 if __name__ == "__main__":
     results = query10()
 
-    # Save to JSON file
     results_file = "results/query10_final_results.json"
     with open(results_file, 'w') as f:
         json.dump({
@@ -84,9 +80,5 @@ if __name__ == "__main__":
     print(f"Found {len(results)} circular trips (start and end within 50m):")
     print("Trip ID | Distance (m) | Start Point | End Point")
     print("-" * 70)
-    for trip in results[:20]:  # Show first 20
+    for trip in results[:20]:
         print(f"{trip['trip_id']:7} | {trip['start_end_distance']:11.2f} | {trip['start_point']} | {trip['end_point']}")
-    if len(results) > 20:
-        print(f"... and {len(results) - 20} more trips")
-
-    print(f"\nResults saved to {results_file}")
