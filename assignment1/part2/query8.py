@@ -267,7 +267,7 @@ def haversine_distance(lat1, lon1, lat2, lon2):
 
     return R * c
 
-def save_progress(close_pairs, processed_points, total_points, filename="query8_progres.pkl"):
+def save_progress(close_pairs, processed_points, total_points, filename="query8_progress.pkl"):
     """Save current progress to file"""
     progress = {
         'close_pairs': list(close_pairs),
@@ -279,7 +279,7 @@ def save_progress(close_pairs, processed_points, total_points, filename="query8_
         pickle.dump(progress, f)
     print(f"\n>>> Progress saved to {filename} <<<")
 
-def load_progress(filename="query8_progres.pkl"):
+def load_progress(filename="query8_progress.pkl"):
     """Load previous progress from file"""
     try:
         with open(filename, 'rb') as f:
