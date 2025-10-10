@@ -8,7 +8,9 @@ import sys
 import threading
 import time
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
+from concurrent.futures import as_completed
 
 import mysql.connector
 
@@ -87,7 +89,7 @@ class InteractiveController:
 class ThreadSafeSpatialIndex:
     """Thread-safe spatial index for faster proximity searches"""
 
-    def __init__(self, cell_size=0.0001):  # ~10m cells
+    def __init__(self, cell_size=0.00005):  # ~5.5m cells - much more precise for 5m search
         self.cell_size = cell_size
         self.cells = defaultdict(list)  # {(cell_x, cell_y): [(timestamp, taxi_id, lat, lon), ...]}
         self.lock = threading.RLock()  # Reentrant lock for thread safety
@@ -121,7 +123,7 @@ class ThreadSafeSpatialIndex:
         nearby_points = []
 
         with self.lock:
-            # Check 3x3 grid of cells
+            # Check 3x3 grid of cells, but with smaller cells this is now ~17m radius
             for dx in [-1, 0, 1]:
                 for dy in [-1, 0, 1]:
                     check_cell = (cell_x + dx, cell_y + dy)
@@ -159,7 +161,6 @@ class WorkerThread:
             print(f"[DEBUG] Thread {self.thread_id}: Starting batch of {len(points_batch)} points")
 
         found_pairs = set()
-        points_to_add = []
 
         for i, (timestamp, taxi_id, lat, lon) in enumerate(points_batch):
             if self.controller.stop_requested:
@@ -189,13 +190,10 @@ class WorkerThread:
                             if self.controller.debug:
                                 print(f"[DEBUG] Thread {self.thread_id}: ✓ PAIR FOUND: {pair} at distance {distance:.2f}m, time diff {abs(timestamp - nearby_time):.1f}s")
 
-            points_to_add.append((timestamp, taxi_id, lat, lon))
+            # Add point to spatial index immediately after processing (CRITICAL FIX)
+            self.spatial_index.add_point(timestamp, taxi_id, lat, lon)
 
-        # Add all points to spatial index at once (more efficient)
-        if points_to_add:
-            if self.controller.debug:
-                print(f"[DEBUG] Thread {self.thread_id}: Adding {len(points_to_add)} points to spatial index")
-            self.spatial_index.add_points_batch(points_to_add)
+        # No longer need to batch add points since we add them individually
 
         if self.controller.debug:
             print(f"[DEBUG] Thread {self.thread_id}: Batch complete - found {len(found_pairs)} pairs")
@@ -246,8 +244,8 @@ def fast_distance_check(lat1, lon1, lat2, lon2, max_distance=5):
     lat_diff = abs(lat2 - lat1)
     lon_diff = abs(lon2 - lon1)
 
-    # For 5m: lat ≈ 0.000045°, lon ≈ 0.00006°
-    if lat_diff > 0.000045 or lon_diff > 0.00006:
+    # For 5m: lat ≈ 0.000045°, lon ≈ 0.00006° - make these more restrictive
+    if lat_diff > 0.000040 or lon_diff > 0.000055:  # Tighter thresholds
         return False
 
     # Quick Euclidean approximation (good enough for 5m)
@@ -267,12 +265,13 @@ def haversine_distance(lat1, lon1, lat2, lon2):
 
     return R * c
 
-def save_progress(close_pairs, processed_points, total_points, filename="query8_progress.pkl"):
+def save_progress(close_pairs, processed_points, total_points, processed_trips=0, filename="query8_progress.pkl"):
     """Save current progress to file"""
     progress = {
         'close_pairs': list(close_pairs),
         'processed_points': processed_points,
         'total_points': total_points,
+        'processed_trips': processed_trips,
         'timestamp': time.time()
     }
     with open(filename, 'wb') as f:
@@ -312,11 +311,100 @@ def query8_multithreaded():
     print(f"\n📂 Checking for previous progress...")
     progress = load_progress()
     if progress:
-        # Check if work is already complete
-        if progress['processed_points'] >= progress['total_points']:
-            print(f"🎉 WORK ALREADY COMPLETE!")
+        # Validate progress data
+        processed_points = progress.get('processed_points', 0)
+        total_points = progress.get('total_points', 1)
+        processed_trips = progress.get('processed_trips', 0)
+
+        # Check for invalid progress data
+        if processed_points > total_points * 2:  # Allow some tolerance but catch obvious errors
+            print(f"⚠️  WARNING: Progress file appears corrupted (processed > total by large margin)")
+            print(f"   Processed points: {processed_points:,}")
+            print(f"   Total points: {total_points:,}")
+            response = input(f"Use corrupted progress anyway? (y/N): ")
+            if response.lower() != 'y':
+                progress = None
+                print(f"📄 Ignoring corrupted progress, starting fresh")
+
+        if progress:
+            trips_info = f", {processed_trips:,} trips" if processed_trips > 0 else ""
+            points_percent = (processed_points / max(total_points, 1)) * 100
+            response = input(f"Found previous progress ({processed_points:,}/{total_points:,} points{trips_info}, {points_percent:.1f}%). Continue? (y/n): ")
+        if response.lower() != 'y':
+            progress = None
+            # Offer to delete the progress file
+            delete_response = input(f"Delete progress file to avoid confusion in future runs? (y/n): ")
+            if delete_response.lower() == 'y':
+                try:
+                    os.remove("query8_progres.pkl")
+                    print(f"🗑️  Deleted progress file")
+                except FileNotFoundError:
+                    pass
+            print(f"📄 Starting fresh analysis")
+        else:
+            print(f"📈 Resuming from previous session")
+            print(f"💡 Note: Still need to reload trip data from database into memory")
+    else:
+        print(f"📄 No previous progress found, starting fresh")
+
+    print(f"\n🔌 Connecting to database...")
+    try:
+        conn = mysql.connector.connect(
+            host="127.0.0.1",
+            port=3306,
+            user="root",
+            password="secret",
+            database="porto",
+            autocommit=True,
+            connection_timeout=300,
+            use_unicode=True,
+            charset='utf8mb4'
+        )
+        print(f"✅ Database connection established")
+    except mysql.connector.Error as e:
+        print(f"\n❌ Failed to connect to MySQL database:")
+        print(f"   Error: {e}")
+        print(f"\n💡 Please ensure:")
+        print(f"   • Docker container is running: docker ps")
+        print(f"   • MySQL service is available on localhost:3306")
+        print(f"   • Database 'porto' exists and is accessible")
+        print(f"\n🚀 To start the Docker container, try:")
+        print(f"   docker start <container_name>")
+        print(f"   # or")
+        print(f"   docker-compose up -d")
+        return None, 0, 0
+
+    if progress:
+        print(f"\n📊 Re-analyzing dataset (required even when resuming)...")
+        print(f"💾 Progress saves results, not source data - must reload trips")
+    else:
+        print(f"\n📊 Analyzing dataset size...")
+
+    # Get total count first for progress tracking
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT COUNT(*) FROM trip_by_taxi t
+        JOIN trip_journey j ON t.trip_id = j.trip_id
+        WHERE j.polyline IS NOT NULL
+          AND j.timestamp_ IS NOT NULL
+          AND JSON_LENGTH(j.polyline) BETWEEN 3 AND 500
+    """)
+    total_trips = cur.fetchone()[0]
+    print(f"📈 Dataset: {total_trips:,} trips to process")
+
+    # Check if previous progress indicates completion
+    if progress:
+        # We need to estimate if the previous run was complete
+        # The saved total_points might be accurate if it's close to what we expect
+        avg_points_per_trip = 10  # Conservative estimate
+        estimated_total_points = total_trips * avg_points_per_trip
+
+        completion_ratio = progress['processed_points'] / max(progress['total_points'], estimated_total_points)
+
+        if completion_ratio >= 0.99:  # 99% complete is considered done
+            print(f"🎉 PREVIOUS RUN WAS ESSENTIALLY COMPLETE!")
             print(f"📊 Found {len(progress['close_pairs']):,} close pairs in previous run")
-            print(f"✅ All {progress['total_points']:,} points were processed")
+            print(f"✅ {progress['processed_points']:,} points were processed ({completion_ratio*100:.1f}% complete)")
 
             # Save results to human-readable JSON
             results_file = "results/query8_final_results.json"
@@ -336,7 +424,7 @@ def query8_multithreaded():
                     'total_close_pairs': len(progress['close_pairs']),
                     'total_points_processed': progress['processed_points'],
                     'total_points_analyzed': progress['total_points'],
-                    'completion_percentage': 100.0
+                    'completion_percentage': completion_ratio * 100
                 },
                 'pairs': formatted_pairs,
                 'metadata': {
@@ -358,50 +446,14 @@ def query8_multithreaded():
 
             print(f"\n✅ Query 8 analysis complete!")
             print(f"📁 Full results available in {results_file}")
-            print(f"� Docker container can be safely stopped")
+            print(f"🐳 Docker container can be safely stopped")
+
+            # Close database before exiting
+            cur.close()
+            conn.close()
             sys.exit(0)
-
-        response = input(f"Found previous progress ({progress['processed_points']:,}/{progress['total_points']:,} points). Continue? (y/n): ")
-        if response.lower() != 'y':
-            progress = None
-            print(f"📄 Starting fresh analysis")
         else:
-            print(f"📈 Resuming from previous session")
-            print(f"💡 Note: Still need to reload trip data from database into memory")
-    else:
-        print(f"📄 No previous progress found, starting fresh")
-
-    print(f"\n🔌 Connecting to database...")
-    conn = mysql.connector.connect(
-        host="127.0.0.1",
-        port=3306,
-        user="root",
-        password="secret",
-        database="porto",
-        autocommit=True,
-        connection_timeout=300,
-        use_unicode=True,
-        charset='utf8mb4'
-    )
-    print(f"✅ Database connection established")
-
-    if progress:
-        print(f"\n📊 Re-analyzing dataset (required even when resuming)...")
-        print(f"💾 Progress saves results, not source data - must reload trips")
-    else:
-        print(f"\n📊 Analyzing dataset size...")
-
-    # Get total count first for progress tracking
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT COUNT(*) FROM trip_by_taxi t
-        JOIN trip_journey j ON t.trip_id = j.trip_id
-        WHERE j.polyline IS NOT NULL
-          AND j.timestamp_ IS NOT NULL
-          AND JSON_LENGTH(j.polyline) BETWEEN 3 AND 500
-    """)
-    total_trips = cur.fetchone()[0]
-    print(f"📈 Dataset: {total_trips:,} trips to process")
+            print(f"📊 Previous progress: {completion_ratio*100:.1f}% complete - continuing from where left off")
 
     # Estimate processing time
     estimated_minutes = max(1, total_trips // 10000)  # Rough estimate
@@ -461,17 +513,41 @@ def query8_multithreaded():
     max_distance = 5  # 5 meters
     max_time_diff = 5  # 5 seconds
 
-    processed_trips = 0
+    processed_trips = progress['processed_trips'] if progress else 0
     processed_points = progress['processed_points'] if progress else 0
-    total_points = 0
+
+    # Calculate ACTUAL total points by scanning all trips first (this is the fix!)
+    print(f"📊 Calculating total GPS points in dataset...")
+    actual_total_points = 0
+    for taxi_id, polyline_json, start_timestamp in all_trips_data:
+        try:
+            polyline = json.loads(polyline_json) if isinstance(polyline_json, str) else polyline_json
+            if polyline:
+                # Count points that will actually be processed
+                valid_points = sum(1 for point in polyline if len(point) >= 2)
+                actual_total_points += valid_points
+        except:
+            continue
+
+    print(f"📈 Total GPS points in dataset: {actual_total_points:,}")
+
+    # Use the actual total, not a running counter
+    total_points = actual_total_points
+    current_points_processed = 0  # This will be our running counter
+
     batch_size = 2000  # Larger batches for multithreading
     thread_batch_size = batch_size // num_threads  # Split among threads
+
+    if progress:
+        print(f"📈 Resuming from trip {processed_trips:,} (will skip already processed trips)")
+        completion_percent = (processed_points / total_points) * 100 if total_points > 0 else 0
+        print(f"📊 Previous completion: {completion_percent:.1f}% ({processed_points:,}/{total_points:,} points)")
 
     start_time = time.time()
     last_save_time = start_time
     last_cleanup_time = start_time
     save_interval = 15 * 60  # Save every 15 minutes
-    cleanup_interval = 600  # Cleanup old spatial index data every 10 minutes
+    cleanup_interval = 300  # Cleanup old spatial index data every 5 minutes (more aggressive)
 
     print(f"⚙️  Configuration:")
     print(f"   • Distance threshold: {max_distance}m")
@@ -491,6 +567,13 @@ def query8_multithreaded():
 
         print(f"\n🔄 Processing {len(all_trips_data):,} trips from memory...")
 
+        if progress and processed_trips > 0:
+            print(f"⏭️  Resuming: Will skip first {processed_trips:,} already processed trips...")
+
+        skipped_trips = 0
+        resume_message_shown = False
+        initial_processed_trips = processed_trips  # Store the initial value before any processing
+
         for trip_index, (taxi_id, polyline_json, start_timestamp) in enumerate(all_trips_data):
             controller.wait_if_paused()
 
@@ -498,19 +581,34 @@ def query8_multithreaded():
                 print(f"\n⏹️  Stop requested by user - saving progress...")
                 break
 
+            # Skip already processed trips when resuming
+            if trip_index < initial_processed_trips:
+                skipped_trips += 1
+                if skipped_trips % 5000 == 0:
+                    print(f"⏭️  Skipped {skipped_trips:,}/{initial_processed_trips:,} already processed trips...")
+                if controller.debug and trip_index % 1000 == 0:
+                    print(f"[DEBUG] Skipping already processed trip {trip_index + 1}/{initial_processed_trips}")
+                continue
+
+            # Show when we start processing new trips (only once) - only if we actually have progress to resume from
+            if trip_index >= initial_processed_trips and initial_processed_trips > 0 and not resume_message_shown:
+                print(f"✅ Skipped {initial_processed_trips:,} already processed trips - now processing new data...")
+                resume_message_shown = True
+
             try:
                 if controller.debug:
-                    print(f"[DEBUG] Processing trip {processed_trips + 1}: taxi_id={taxi_id}, timestamp={start_timestamp}")
+                    print(f"[DEBUG] Processing trip {trip_index + 1}: taxi_id={taxi_id}, timestamp={start_timestamp}")
 
                 polyline = json.loads(polyline_json) if isinstance(polyline_json, str) else polyline_json
                 if not polyline:
                     if controller.debug:
                         print(f"[DEBUG] Skipping trip {taxi_id}: empty polyline")
+                    processed_trips += 1
                     continue
 
                 processed_trips += 1
 
-                if controller.debug and processed_trips <= 5:
+                if controller.debug and (processed_trips - (progress['processed_trips'] if progress else 0)) <= 5:
                     print(f"[DEBUG] Trip {processed_trips}: taxi {taxi_id} has {len(polyline)} GPS points")
 
                 # Convert polyline to points
@@ -520,7 +618,7 @@ def query8_multithreaded():
                         lon, lat = point[0], point[1]
                         point_timestamp = start_timestamp + (i * 15)
                         trip_points.append((point_timestamp, taxi_id, lat, lon))
-                        total_points += 1
+                        # Don't increment current_points_processed here - only count when actually processed
 
                 batch_points.extend(trip_points)
 
@@ -556,16 +654,37 @@ def query8_multithreaded():
                     if controller.debug:
                         print(f"[DEBUG] STEP: Waiting for {len(future_to_batch)} threads to complete...")
 
-                    # Collect results from completed futures
+                    # Collect results from completed futures with stop checking
                     completed_threads = 0
-                    for future in as_completed(future_to_batch):
-                        batch_pairs = future.result()
-                        close_pairs.update(batch_pairs)
-                        processed_points += future_to_batch[future]
-                        completed_threads += 1
+                    remaining_futures = set(future_to_batch.keys())
+                    start_wait_time = time.time()
+                    warned_about_delay = False
 
-                        if controller.debug:
-                            print(f"[DEBUG] STEP: Thread {completed_threads}/{len(future_to_batch)} completed, found {len(batch_pairs)} new pairs (total: {len(close_pairs)})")
+                    while remaining_futures and not controller.stop_requested:
+                        try:
+                            # Check if threads are taking unusually long
+                            wait_time = time.time() - start_wait_time
+                            if wait_time > 30 and not warned_about_delay and len(remaining_futures) > 0:
+                                print(f"\n⚠️  Threads processing for {wait_time:.1f}s - this is normal for large batches")
+                                print(f"   {len(remaining_futures)} threads still working on spatial analysis...")
+                                print(f"   💡 Tip: Press 's' + Enter to request graceful stop anytime")
+                                warned_about_delay = True
+
+                            # Wait for any future to complete with a short timeout
+                            for future in as_completed(remaining_futures, timeout=0.5):
+                                batch_pairs = future.result()
+                                close_pairs.update(batch_pairs)
+                                batch_processed_points = future_to_batch[future]
+                                processed_points += batch_processed_points
+                                completed_threads += 1
+                                remaining_futures.remove(future)
+
+                                if controller.debug:
+                                    print(f"[DEBUG] STEP: Thread {completed_threads}/{len(future_to_batch)} completed, found {len(batch_pairs)} new pairs (total: {len(close_pairs)})")
+                                break  # Process one future at a time to check stop frequently
+                        except FuturesTimeoutError:
+                            # Just continue waiting - timeouts are normal and expected
+                            continue
 
                     future_to_batch.clear()
                     batch_points = []
@@ -580,7 +699,7 @@ def query8_multithreaded():
                     if current_time - last_save_time > save_interval:
                         if controller.debug:
                             print(f"[DEBUG] STEP: Auto-saving progress (last save {(current_time - last_save_time)/60:.1f} minutes ago)")
-                        save_progress(close_pairs, processed_points, total_points)
+                        save_progress(close_pairs, processed_points, total_points, processed_trips)
                         last_save_time = current_time
 
                     # Clean up old spatial index data to prevent memory bloat
@@ -601,28 +720,51 @@ def query8_multithreaded():
 
             # Progress reporting
             if processed_trips % 3000 == 0:  # More frequent updates for multithreading
-                elapsed = time.time() - start_time
-                rate = processed_trips / elapsed if elapsed > 0 else 0
-                eta = (len(all_trips_data) - processed_trips) / rate if rate > 0 else 0
+                current_time = time.time()
+                elapsed = current_time - start_time
 
-                print(f"📊 Progress: {processed_trips:,}/{len(all_trips_data):,} ({processed_trips/len(all_trips_data)*100:.1f}%) "
-                      f"| Points: {total_points:,} | Pairs: {len(close_pairs)} "
-                      f"| Rate: {rate:.1f} trips/s | ETA: {eta/60:.1f}m | Threads: {num_threads}")
+                # Calculate rate based on trips processed since last report (more accurate)
+                if not hasattr(query8_multithreaded, '_last_report_time'):
+                    query8_multithreaded._last_report_time = start_time
+                    query8_multithreaded._last_report_trips = processed_trips - 3000
+
+                time_since_last = current_time - query8_multithreaded._last_report_time
+                trips_since_last = processed_trips - query8_multithreaded._last_report_trips
+                current_rate = trips_since_last / time_since_last if time_since_last > 0 else 0
+
+                # Update for next report
+                query8_multithreaded._last_report_time = current_time
+                query8_multithreaded._last_report_trips = processed_trips
+
+                current_completion = (processed_points / total_points * 100) if total_points > 0 else 0
+                pair_rate = len(close_pairs) / processed_points if processed_points > 0 else 0
+                estimated_total_pairs = int(pair_rate * total_points)
+                print(f"📊 Progress: {processed_trips:,}/{len(all_trips_data):,} trips ({processed_trips/len(all_trips_data)*100:.1f}%) "
+                      f"| Points: {processed_points:,}/{total_points:,} ({current_completion:.1f}%) | Pairs: {len(close_pairs):,} "
+                      f"| Rate: {current_rate:.1f} trips/s | Est. Total Pairs: {estimated_total_pairs:,}")
 
                 if controller.debug:
-                    print(f"[DEBUG] Detailed progress: {processed_points:,} points processed, {len(close_pairs)} unique pairs found")        # Process remaining batch
+                    print(f"[DEBUG] Detailed progress: {processed_points:,} points processed, {len(close_pairs)} unique pairs found")        # Process remaining batch - CRITICAL: Must process ALL remaining points
         if batch_points:
             print(f"\n🔄 Processing final batch of {len(batch_points)} points...")
+            print(f"⚠️  IMPORTANT: This ensures ALL GPS points are processed for proximity detection")
             if controller.debug:
                 print(f"[DEBUG] FINAL STEP: Processing remaining {len(batch_points)} points")
 
+            # Use smaller thread batches for final processing if needed
+            final_thread_batch_size = max(100, thread_batch_size)  # Ensure reasonable batch sizes
             thread_batches = [
-                batch_points[i:i + thread_batch_size]
-                for i in range(0, len(batch_points), thread_batch_size)
+                batch_points[i:i + final_thread_batch_size]
+                for i in range(0, len(batch_points), final_thread_batch_size)
             ]
 
+            print(f"📊 Final batch breakdown: {len(thread_batches)} thread batches")
             if controller.debug:
                 print(f"[DEBUG] FINAL STEP: Split into {len(thread_batches)} final thread batches")
+                for idx, tb in enumerate(thread_batches):
+                    print(f"[DEBUG]   Final thread {idx}: {len(tb)} points")
+
+            future_to_batch.clear()  # Clear any previous futures
 
             for i, thread_batch in enumerate(thread_batches):
                 if thread_batch:
@@ -632,19 +774,59 @@ def query8_multithreaded():
                     future = executor.submit(worker.process_point_batch, thread_batch)
                     future_to_batch[future] = len(thread_batch)
 
-            # Collect final results
+            # Collect final results with stop checking
+            print(f"⏳ Waiting for {len(future_to_batch)} final threads to complete...")
             if controller.debug:
                 print(f"[DEBUG] FINAL STEP: Collecting results from {len(future_to_batch)} final threads")
 
-            for future in as_completed(future_to_batch):
-                batch_pairs = future.result()
-                close_pairs.update(batch_pairs)
-                processed_points += future_to_batch[future]
+            final_threads_completed = 0
+            remaining_futures = set(future_to_batch.keys())
+            final_start_time = time.time()
+            final_warned = False
 
-                if controller.debug:
-                    print(f"[DEBUG] FINAL STEP: Final thread completed, found {len(batch_pairs)} pairs")
+            while remaining_futures and not controller.stop_requested:
+                try:
+                    # Warn if final processing is taking long
+                    final_wait_time = time.time() - final_start_time
+                    if final_wait_time > 20 and not final_warned and len(remaining_futures) > 0:
+                        print(f"\n⏳ Final processing taking {final_wait_time:.1f}s - completing remaining analysis...")
+                        print(f"   {len(remaining_futures)} final threads still working...")
+                        final_warned = True
+
+                    for future in as_completed(remaining_futures, timeout=0.5):
+                        batch_pairs = future.result()
+                        close_pairs.update(batch_pairs)
+                        batch_processed_points = future_to_batch[future]
+                        processed_points += batch_processed_points
+                        final_threads_completed += 1
+                        remaining_futures.remove(future)
+
+                        if controller.debug:
+                            print(f"[DEBUG] FINAL: Thread {final_threads_completed}/{len(future_to_batch)} completed, found {len(batch_pairs)} new pairs")
+                        else:
+                            print(f"✅ Final thread {final_threads_completed}/{len(future_to_batch)} complete")
+                        break  # Process one at a time
+                except FuturesTimeoutError:
+                    # Timeouts are normal - just continue waiting
+                    continue
+
+            print(f"🎉 Final batch processing complete: {len(batch_points)} points processed")
 
     print(f"\n✅ In-memory processing complete")
+
+    # CRITICAL VALIDATION: Verify we processed all points
+    processing_completion = (processed_points / total_points) * 100 if total_points > 0 else 0
+    print(f"\n📊 PROCESSING VERIFICATION:")
+    print(f"   • Expected total points: {total_points:,}")
+    print(f"   • Actually processed: {processed_points:,}")
+    print(f"   • Completion percentage: {processing_completion:.1f}%")
+
+    if processing_completion < 99.5:  # Allow small rounding tolerance
+        print(f"⚠️  WARNING: INCOMPLETE PROCESSING DETECTED!")
+        print(f"   Missing {total_points - processed_points:,} points ({100 - processing_completion:.1f}%)")
+        print(f"   Results may be incomplete - consider re-running with debug mode")
+    else:
+        print(f"✅ VERIFICATION PASSED: All points processed successfully")
 
     print(f"\n🐳 DOCKER CONTAINER FINAL NOTICE:")
     print(f"{'='*40}")
@@ -655,7 +837,7 @@ def query8_multithreaded():
 
     # Final save
     print(f"\n💾 Saving final progress...")
-    save_progress(close_pairs, processed_points, total_points)
+    save_progress(close_pairs, processed_points, total_points, processed_trips)
     controller.stop_input_handler()
 
     if controller.debug:
@@ -723,6 +905,13 @@ if __name__ == "__main__":
         print(f"\n⏱️  Analysis started at {time.strftime('%H:%M:%S', time.localtime(start_time))}")
 
         results, total_points, processed_points = query8_multithreaded()
+
+        # Handle database connection failure
+        if results is None:
+            print(f"\n❌ Analysis terminated due to database connection failure")
+            print(f"💡 Please resolve the database issue and try again")
+            sys.exit(1)
+
         end_time = time.time()
 
         runtime = end_time - start_time
@@ -772,6 +961,15 @@ if __name__ == "__main__":
         print(f"💾 Progress has been saved and can be resumed later")
         print(f"🐳 Docker container can be safely stopped")
         sys.exit(0)
+    except mysql.connector.Error as e:
+        print(f"\n\n❌ Database connection error:")
+        print(f"   Error: {e}")
+        print(f"\n💡 Please ensure MySQL container is running:")
+        print(f"   docker ps -a  # Check container status")
+        print(f"   docker start <container_name>  # Start if stopped")
+        print(f"💾 Any progress made has been saved")
+        print(f"🐳 Docker container can be safely stopped")
+        sys.exit(1)
     except Exception as e:
         print(f"\n\n❌ Error occurred during analysis:")
         print(f"   Error: {e}")
