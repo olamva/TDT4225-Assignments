@@ -1,4 +1,4 @@
-# TDT4225 - Assignment 1
+# TDT4225 - Assignment 2
 
 ## Setup Instructions
 

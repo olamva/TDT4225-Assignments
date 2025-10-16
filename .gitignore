@@ -6,6 +6,3 @@ __pycache__/
 *.pkl
 figures/
 results/
-
-# Assignment 3
-movies/
