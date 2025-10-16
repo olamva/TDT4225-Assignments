@@ -5,7 +5,7 @@ import pandas as pd
 from tabulate import tabulate
 
 # Set up paths
-data_dir = Path('data/movies')
+data_dir = Path('../data/movies')
 
 def analyze_keywords(df):
     """Analyze keywords.csv"""

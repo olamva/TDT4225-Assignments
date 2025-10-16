@@ -7,151 +7,31 @@ import pandas as pd
 from tabulate import tabulate
 
 # Set up paths
-data_dir = Path('data/movies')
-figures_dir = Path('figures')
+data_dir = Path('../data/movies')
+figures_dir = Path('../figures')
 figures_dir.mkdir(exist_ok=True)
 
-# List of CSV files
-csv_files = [
-    'movies_metadata.csv',
-    'credits.csv',
-    'keywords.csv',
-    'links.csv',
-    'links_small.csv',
-    'ratings.csv',
-    'ratings_small.csv'
-]
+def analyze_movies_metadata(df):
+    """Analyze movies_metadata.csv"""
+    print("=== Movies Metadata Analysis ===")
 
-def analyze_csv(file_path):
-    """Analyze a CSV file: list features & types, find missing values."""
-    print(f"\n=== Analyzing {file_path.name} ===")
-    try:
-        df = pd.read_csv(file_path, low_memory=False)
+    # Features and types in a table
+    dtypes_table = [[col, str(dtype)] for col, dtype in df.dtypes.items()]
+    print("Features and types:")
+    print(tabulate(dtypes_table, headers=['Feature', 'Type'], tablefmt='grid'))
 
-        # Features and types in a table
-        dtypes_table = [[col, str(dtype)] for col, dtype in df.dtypes.items()]
-        print("Features and types:")
-        print(tabulate(dtypes_table, headers=['Feature', 'Type'], tablefmt='grid'))
+    print("\nMissing values and zero values:")
+    missing = df.isnull().sum()
+    for col in df.columns:
+        null_count = missing[col]
+        zero_count = (df[col] == 0).sum() if df[col].dtype in ['int64', 'float64'] else 0
+        if null_count > 0 or zero_count > 0:
+            print(f"  {col}: {null_count} null ({null_count/len(df)*100:.2f}%), {zero_count} zero ({zero_count/len(df)*100:.2f}%)")
+    if missing.sum() == 0 and all((df[col] != 0).sum() == len(df) for col in df.columns if df[col].dtype in ['int64', 'float64']):
+        print("  No missing or zero values found.")
 
-        print("\nMissing values and zero values:")
-        missing = df.isnull().sum()
-        for col in df.columns:
-            null_count = missing[col]
-            zero_count = (df[col] == 0).sum() if df[col].dtype in ['int64', 'float64'] else 0
-            if null_count > 0 or zero_count > 0:
-                print(f"  {col}: {null_count} null ({null_count/len(df)*100:.2f}%), {zero_count} zero ({zero_count/len(df)*100:.2f}%)")
-        if missing.sum() == 0 and all((df[col] != 0).sum() == len(df) for col in df.columns if df[col].dtype in ['int64', 'float64']):
-            print("  No missing or zero values found.")
-
-        # Specific analysis for movies_metadata.csv
-        if file_path.name == 'movies_metadata.csv':
-            analyze_movies_metadata_specific(df)
-
-        # Print first row for credits.csv
-        if file_path.name == 'credits.csv':
-
-            # Analyze cast and crew for null or empty arrays
-            print("\n=== Credits Analysis ===")
-            try:
-                df['cast_parsed'] = df['cast'].apply(lambda x: ast.literal_eval(x) if pd.notnull(x) and x != '' else [])
-                df['crew_parsed'] = df['crew'].apply(lambda x: ast.literal_eval(x) if pd.notnull(x) and x != '' else [])
-
-                null_cast = df['cast'].isnull().sum() + (df['cast'] == '').sum()
-                empty_cast = df['cast_parsed'].apply(lambda x: len(x) == 0).sum()
-                total_cast_issues = null_cast + empty_cast
-
-                null_crew = df['crew'].isnull().sum() + (df['crew'] == '').sum()
-                empty_crew = df['crew_parsed'].apply(lambda x: len(x) == 0).sum()
-                total_crew_issues = null_crew + empty_crew
-
-                print(f"Cast: {total_cast_issues} rows with null or empty arrays")
-                print(f"Crew: {total_crew_issues} rows with null or empty arrays")
-
-            except Exception as e:
-                print(f"Error analyzing cast/crew: {e}")
-
-        # Analyze keywords for null or empty arrays
-        if file_path.name == 'keywords.csv':
-            print("\n=== Keywords Analysis ===")
-            try:
-                # Attributes and types
-                dtypes_table = [[col, str(dtype)] for col, dtype in df.dtypes.items()]
-                print("Attributes and types:")
-                print(tabulate(dtypes_table, headers=['Attribute', 'Type'], tablefmt='grid'))
-
-                df['keywords_parsed'] = df['keywords'].apply(lambda x: ast.literal_eval(x) if pd.notnull(x) and x != '' else [])
-
-                null_keywords = df['keywords'].isnull().sum() + (df['keywords'] == '').sum()
-                empty_keywords = df['keywords_parsed'].apply(lambda x: len(x) == 0).sum()
-                total_issues = null_keywords + empty_keywords
-
-                print(f"Keywords: {total_issues} rows with null or empty arrays")
-
-            except Exception as e:
-                print(f"Error analyzing keywords: {e}")
-
-        # Analyze ratings for missing values and invalid IDs
-        if 'ratings' in file_path.name:
-            print("\n=== Ratings Analysis ===")
-            try:
-                # Missing values
-                missing = df.isnull().sum()
-                total_missing = missing.sum()
-                print(f"Rows with missing values: {total_missing}")
-
-                # Invalid IDs (null or 0)
-                invalid_user_ids = df['userId'].isnull().sum() + (df['userId'] == 0).sum()
-                invalid_movie_ids = df['movieId'].isnull().sum() + (df['movieId'] == 0).sum()
-                total_invalid_ids = invalid_user_ids + invalid_movie_ids
-                print(f"Rows with invalid userId: {invalid_user_ids}")
-                print(f"Rows with invalid movieId: {invalid_movie_ids}")
-                print(f"Total rows with invalid IDs: {total_invalid_ids}")
-
-                # For ratings_small.csv, calculate average rating
-                if file_path.name == 'ratings_small.csv':
-                    avg_rating = df['rating'].mean()
-                    print(f"Average rating: {avg_rating:.2f}")
-
-            except Exception as e:
-                print(f"Error analyzing ratings: {e}")
-
-        # Analyze links for missing values and attributes/types
-        if file_path.name == 'links.csv':
-            print("\n=== Links Analysis ===")
-            try:
-                # Attributes and types
-                dtypes_table = [[col, str(dtype)] for col, dtype in df.dtypes.items()]
-                print("Attributes and types:")
-                print(tabulate(dtypes_table, headers=['Attribute', 'Type'], tablefmt='grid'))
-
-                # Missing values
-                missing = df.isnull().sum()
-                total_missing = missing.sum()
-                print(f"Rows with missing values: {total_missing}")
-
-                if total_missing > 0:
-                    print("Missing values by column:")
-                    for col in df.columns:
-                        if missing[col] > 0:
-                            print(f"  {col}: {missing[col]} ({missing[col]/len(df)*100:.2f}%)")
-
-                # Check for missing/null imdbId
-                if 'imdbId' in df.columns:
-                    null_imdb = df['imdbId'].isnull().sum()
-                    empty_imdb = (df['imdbId'] == '').sum() if df['imdbId'].dtype == 'object' else 0
-                    total_invalid_imdb = null_imdb + empty_imdb
-                    print(f"Rows with missing/null imdbId: {total_invalid_imdb}")
-                    if total_invalid_imdb > 0:
-                        print(f"  Null imdbId: {null_imdb}")
-                        print(f"  Empty imdbId: {empty_imdb}")
-
-            except Exception as e:
-                print(f"Error analyzing links: {e}")
-
-        return df
-    except Exception as e:
-        print(f"Error reading {file_path}: {e}")
-        return None
+    # Specific analysis for movies_metadata.csv
+    analyze_movies_metadata_specific(df)
 
 def analyze_movies_metadata_specific(df):
     """Specific analysis for movies_metadata.csv"""
@@ -376,13 +256,13 @@ def analyze_movies_metadata_specific(df):
     print(f"Average number of movies in a collection: {avg_movies_per_collection:.2f}")
 
 def main():
-    # Analyze all CSVs
-    for csv_file in csv_files:
-        file_path = data_dir / csv_file
-        if file_path.exists():
-            analyze_csv(file_path)
-        else:
-            print(f"File {csv_file} not found.")
+    # Analyze movies_metadata.csv
+    data_path = data_dir / 'movies_metadata.csv'
+    if data_path.exists():
+        df = pd.read_csv(data_path, low_memory=False)
+        analyze_movies_metadata(df)
+    else:
+        print(f"Data file not found: {data_path}")
 
 if __name__ == '__main__':
     main()

@@ -4,11 +4,11 @@ import pandas as pd
 from tabulate import tabulate
 
 # Set up paths
-data_dir = Path('data/movies')
+data_dir = Path('../data/movies')
 
-def analyze_links(df):
-    """Analyze links.csv"""
-    print("=== Links Analysis ===")
+def analyze_links_small(df):
+    """Analyze links_small.csv"""
+    print("=== Links Small Analysis ===")
 
     # Attributes and types
     dtypes_table = [[col, str(dtype)] for col, dtype in df.dtypes.items()]
@@ -25,12 +25,12 @@ def analyze_links(df):
     if missing.sum() == 0 and all((df[col] != 0).sum() == len(df) for col in df.columns if df[col].dtype in ['int64', 'float64']):
         print("  No missing or zero values found.")
 
-    # Specific analysis for links.csv
-    analyze_links_specific(df)
+    # Specific analysis for links_small.csv
+    analyze_links_small_specific(df)
 
-def analyze_links_specific(df):
-    """Specific analysis for links.csv"""
-    print("\n=== Links Specific Analysis ===")
+def analyze_links_small_specific(df):
+    """Specific analysis for links_small.csv"""
+    print("\n=== Links Small Specific Analysis ===")
 
     # Missing values
     missing = df.isnull().sum()
@@ -54,11 +54,11 @@ def analyze_links_specific(df):
             print(f"  Empty imdbId: {empty_imdb}")
 
 def main():
-    # Analyze links.csv
-    data_path = data_dir / 'links.csv'
+    # Analyze links_small.csv
+    data_path = data_dir / 'links_small.csv'
     if data_path.exists():
         df = pd.read_csv(data_path, low_memory=False)
-        analyze_links(df)
+        analyze_links_small(df)
     else:
         print(f"Data file not found: {data_path}")
 
