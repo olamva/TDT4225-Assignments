@@ -11,13 +11,19 @@ class DbConnector:
     USER = "TEST_USER" // This is the user you created and added privileges for
     PASSWORD = "test123" // The password you set for said user
     """
+    is_sepanta = True
 
     def __init__(self,
                  DATABASE='DATABASE_NAME',
-                 HOST="localhost",
+                 HOST="127.0.0.1",
                  USER="TEST_USER",
                  PASSWORD="test123"):
-        uri = "mongodb://%s:%s@%s/%s?authSource=admin" % (USER, PASSWORD, HOST, DATABASE)
+        if self.is_sepanta:
+            # Windows-compatible: No authentication for local development
+            uri = "mongodb://%s:27017/" % HOST
+        else:
+            # Mac/Linux: With authentication
+            uri = "mongodb://%s:%s@%s/?authSource=admin" % (USER, PASSWORD, HOST)
         # Connect to the databases
         try:
             self.client = MongoClient(uri)

@@ -17,7 +17,9 @@ pip install -r requirements.txt
 
 ## MongoDB Setup
 
-To set up MongoDB using Docker, run the following command:
+### For Mac/Linux:
+
+To set up MongoDB using Docker with authentication:
 
 ```bash
 docker run -d --name mongodb-local \
@@ -35,4 +37,27 @@ To connect to MongoDB, you can use the MongoDB Shell:
 docker exec -it mongodb-local mongosh -u TEST_USER -p test123 --authenticationDatabase admin
 ```
 
-Or use a Python client like pymongo in your scripts (the `DbConnector.py` class handles authentication automatically).
+**Note:** Set `is_sepanta = False` in `DbConnector.py` for this setup.
+
+### For Sepanta (Windows):
+
+To set up MongoDB using Docker without authentication:
+
+```bash
+docker run -d --name mongodb-local \
+  -p 27017:27017 \
+  -v mongodb_data:/data/db \
+  mongo:latest
+```
+
+To connect to MongoDB, you can use the MongoDB Shell:
+
+```bash
+docker exec -it mongodb-local mongosh
+```
+
+**Note:** Set `is_sepanta = True` in `DbConnector.py` for this setup.
+
+---
+
+Or use a Python client like pymongo in your scripts (the `DbConnector.py` class handles authentication automatically based on the `is_sepanta` flag).
