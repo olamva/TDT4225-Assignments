@@ -1,4 +1,4 @@
-from pymongo import MongoClient, version
+from pymongo import MongoClient
 
 
 class DbConnector:
@@ -11,7 +11,7 @@ class DbConnector:
     USER = "TEST_USER" // This is the user you created and added privileges for
     PASSWORD = "test123" // The password you set for said user
     """
-    is_sepanta = True
+    is_sepanta = False
 
     def __init__(self,
                  DATABASE='DATABASE_NAME',
