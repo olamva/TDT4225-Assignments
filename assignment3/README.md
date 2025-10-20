@@ -61,3 +61,12 @@ docker exec -it mongodb-local mongosh
 ---
 
 Or use a Python client like pymongo in your scripts (the `DbConnector.py` class handles authentication automatically based on the `is_sepanta` flag).
+
+
+### Troubleshooting
+
+If you need to re-initialize the database, you can stop and remove the Docker container with:
+
+```bash
+docker stop mongodb-local && docker rm mongodb-local
+```
