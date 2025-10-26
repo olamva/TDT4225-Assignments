@@ -10,14 +10,29 @@ data_dir = Path('../data/movies')
 def analyze_keywords(df):
     """Analyze keywords.csv"""
     print("=== Keywords Analysis ===")
+    print(f"Number of rows: {len(df)}")
+    print(f"Number of columns: {len(df.columns)}")
 
     # Attributes and types
     dtypes_table = [[col, str(dtype)] for col, dtype in df.dtypes.items()]
-    print("Attributes and types:")
+    print("\nAttributes and types:")
     print(tabulate(dtypes_table, headers=['Attribute', 'Type'], tablefmt='grid'))
 
     print("\nMissing values and zero values:")
     missing = df.isnull().sum()
+    
+    # Check for missing values in 'id' column (representing movies)
+    id_missing = df['id'].isnull().sum()
+    print(f"Rows with missing values for movies (id): {id_missing}")
+    
+    # Check for missing values in 'keywords' column
+    keywords_missing = df['keywords'].isnull().sum()
+    # Also count empty string as missing
+    keywords_empty = (df['keywords'] == '').sum()
+    total_keywords_missing = keywords_missing + keywords_empty
+    print(f"Rows with missing values for keywords: {total_keywords_missing} ({keywords_missing} null + {keywords_empty} empty)")
+    
+    print()
     for col in df.columns:
         null_count = missing[col]
         zero_count = (df[col] == 0).sum() if df[col].dtype in ['int64', 'float64'] else 0

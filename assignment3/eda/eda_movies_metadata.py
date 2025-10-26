@@ -45,6 +45,8 @@ def analyze_movies_metadata_specific(df):
     print("Budget statistics:")
     print(f"  Mean: {df['budget'].mean():.2f}")
     print(f"  Median: {df['budget'].median():.2f}")
+    print(f"  Max: {df['budget'].max():.2f}")
+    print(f"  Min: {df['budget'].min():.2f}")
 
     print("Revenue statistics:")
     print(f"  Mean: {df['revenue'].mean():.2f}")
@@ -54,6 +56,8 @@ def analyze_movies_metadata_specific(df):
 
     # Runtime statistics
     print("Runtime statistics:")
+    print(f"  Mean: {df['runtime'].mean():.2f} minutes")
+    print(f"  Median: {df['runtime'].median():.2f} minutes")
     print(f"  Max: {df['runtime'].max():.2f} minutes")
     print(f"  Min: {df['runtime'].min():.2f} minutes")
     movies_above_300 = df[df['runtime'] > 300].shape[0]
@@ -133,6 +137,46 @@ def analyze_movies_metadata_specific(df):
     movies_without_genres = df['genres_list'].apply(lambda x: len(x) == 0).sum()
     print(f"Movies without genres: {movies_without_genres}")
 
+    # Genre analysis
+    print("\n=== Genre Analysis ===")
+    
+    # Get all unique genres
+    all_genres = []
+    for genres_list in df['genres_list']:
+        all_genres.extend(genres_list)
+    unique_genres = sorted(set(all_genres))
+    
+    # Define valid genres (exclude production companies)
+    invalid_genres = {'Aniplex', 'BROSTA TV', 'Carousel Productions', 'GoHands', 
+                     'Mardock Scramble Production Committee', 'Odyssey Media', 
+                     'Pulser Productions', 'Rogue State', 'Sentai Filmworks', 
+                     'Telescene Film Group Productions', 'The Cartel', 
+                     'Vision View Entertainment'}
+    valid_genres = [g for g in unique_genres if g not in invalid_genres]
+    
+    print(f"Number of different genres: {len(valid_genres)}")
+    print(f"All genres: {', '.join(valid_genres)}")
+    print(f"\nInvalid entries found (production companies): {len(invalid_genres)}")
+    print(f"  {', '.join(sorted(invalid_genres))}")
+    
+    # Create a row for each genre (explode the genres_list)
+    df_exploded = df.explode('genres_list')
+    df_exploded = df_exploded[df_exploded['genres_list'].notna() & (df_exploded['genres_list'] != '')]
+    # Filter out invalid genres
+    df_exploded = df_exploded[~df_exploded['genres_list'].isin(invalid_genres)]
+    
+    # Average and median runtime for each genre
+    print("\n=== Average and Median Runtime for Each Genre (All 20 Genres) ===")
+    genre_runtime_stats = df_exploded.groupby('genres_list')['runtime'].agg(['mean', 'median', 'count']).sort_values('mean', ascending=False)
+    genre_runtime_stats.columns = ['Avg Runtime', 'Median Runtime', 'Movie Count']
+    print(tabulate(genre_runtime_stats, headers='keys', tablefmt='grid', floatfmt='.2f'))
+    
+    # Genres ranked by average vote
+    print("\n=== Genres Ranked by Average Vote (All 20 Genres) ===")
+    genre_vote_stats = df_exploded.groupby('genres_list')['vote_average'].agg(['mean', 'median', 'count']).sort_values('mean', ascending=False)
+    genre_vote_stats.columns = ['Avg Vote', 'Median Vote', 'Movie Count']
+    print(tabulate(genre_vote_stats, headers='keys', tablefmt='grid', floatfmt='.2f'))
+
     # Show unique status values
     unique_statuses = df['status'].dropna().unique()
     print(f"Unique status values ({len(unique_statuses)}): {list(unique_statuses)}")
@@ -177,6 +221,19 @@ def analyze_movies_metadata_specific(df):
     plt.ylabel('Revenue')
     plt.savefig(figures_dir / 'budget_revenue_scatter.png')
     plt.close()
+
+    # Scatter plot runtime vs popularity
+    plt.figure(figsize=(10, 6))
+    df['popularity'] = pd.to_numeric(df['popularity'], errors='coerce')
+    valid_data = df.dropna(subset=['runtime', 'popularity'])
+    valid_data = valid_data[(valid_data['runtime'] > 0) & (valid_data['popularity'] > 0)]
+    plt.scatter(valid_data['runtime'], valid_data['popularity'], alpha=0.5)
+    plt.title('Runtime vs Popularity')
+    plt.xlabel('Runtime (minutes)')
+    plt.ylabel('Popularity')
+    plt.savefig(figures_dir / 'runtime_popularity_scatter.png')
+    plt.close()
+    print("Runtime vs Popularity scatter plot saved to figures/runtime_popularity_scatter.png")
 
     # Count unique values in JSON fields
     def extract_names(field_str, key='name'):

@@ -10,10 +10,12 @@ data_dir = Path('../data/movies')
 def analyze_credits(df):
     """Analyze credits.csv"""
     print("=== Credits Analysis ===")
+    print(f"Number of rows: {len(df)}")
+    print(f"Number of columns: {len(df.columns)}")
 
     # Features and types in a table
     dtypes_table = [[col, str(dtype)] for col, dtype in df.dtypes.items()]
-    print("Features and types:")
+    print("\nFeatures and types:")
     print(tabulate(dtypes_table, headers=['Feature', 'Type'], tablefmt='grid'))
 
     print("\nMissing values and zero values:")

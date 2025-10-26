@@ -10,14 +10,27 @@ def analyze_ratings(df, is_small=False):
     """Analyze ratings.csv or ratings_small.csv"""
     dataset_name = "Ratings Small" if is_small else "Ratings"
     print(f"=== {dataset_name} Analysis ===")
+    print(f"Number of rows: {len(df)}")
+    print(f"Number of columns: {len(df.columns)}")
 
     # Features and types in a table
     dtypes_table = [[col, str(dtype)] for col, dtype in df.dtypes.items()]
-    print("Features and types:")
+    print("\nFeatures and types:")
     print(tabulate(dtypes_table, headers=['Feature', 'Type'], tablefmt='grid'))
 
-    print("\nMissing values and zero values:")
+    print("\nMissing values:")
     missing = df.isnull().sum()
+    
+    # Check for missing values in specific columns
+    if 'userId' in df.columns:
+        user_missing = df['userId'].isnull().sum()
+        print(f"Rows with missing values for users (userId): {user_missing}")
+    
+    if 'movieId' in df.columns:
+        movie_missing = df['movieId'].isnull().sum()
+        print(f"Rows with missing values for movies (movieId): {movie_missing}")
+    
+    print("\nDetailed missing values and zero values:")
     for col in df.columns:
         null_count = missing[col]
         zero_count = (df[col] == 0).sum() if df[col].dtype in ['int64', 'float64'] else 0

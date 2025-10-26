@@ -9,10 +9,16 @@ data_dir = Path('../data/movies')
 def analyze_links(df):
     """Analyze links.csv"""
     print("=== Links Analysis ===")
+    print(f"Number of rows: {len(df)}")
+    print(f"Number of columns: {len(df.columns)}")
+    
+    # Count rows with any missing values
+    rows_with_missing = df.isnull().any(axis=1).sum()
+    print(f"\nRows with missing values: {rows_with_missing}")
 
     # Attributes and types
     dtypes_table = [[col, str(dtype)] for col, dtype in df.dtypes.items()]
-    print("Attributes and types:")
+    print("\nAttributes and types:")
     print(tabulate(dtypes_table, headers=['Attribute', 'Type'], tablefmt='grid'))
 
     print("\nMissing values and zero values:")

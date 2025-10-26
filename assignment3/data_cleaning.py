@@ -16,9 +16,14 @@ def clean_movies_runtime(df):
     Returns:
         cleaned_df: DataFrame with cleaned runtime data and only released movies
     """
+    original_rows = len(df)
+    print(f"Original movies_metadata rows: {original_rows}")
+    
     # First filter to only released movies
     df = df[df['status'] == 'Released'].copy()
-    print(f"Filtered to {len(df)} released movies")
+    rows_removed = original_rows - len(df)
+    print(f"Rows removed (non-released movies): {rows_removed}")
+    print(f"Rows after cleaning: {len(df)}")
 
     cleaned_df = df.copy()
     zero_runtime_mask = cleaned_df['runtime'] == 0
@@ -74,7 +79,8 @@ def clean_credits_crew(df):
     Returns:
         cleaned_df: DataFrame with rows having valid crew
     """
-    print(f"Original credits rows: {len(df)}")
+    original_rows = len(df)
+    print(f"Original credits rows: {original_rows}")
 
     # Parse crew to check if empty
     df['crew_parsed'] = df['crew'].apply(lambda x: ast.literal_eval(x) if pd.notnull(x) and x != '' else [])
@@ -85,7 +91,9 @@ def clean_credits_crew(df):
     cleaned_df = df[valid_crew_mask].copy()
     cleaned_df = cleaned_df.drop(columns=['crew_parsed'])  # Remove temporary column
 
-    print(f"Cleaned credits rows: {len(cleaned_df)} (removed {len(df) - len(cleaned_df)} rows with missing crew)")
+    rows_removed = original_rows - len(cleaned_df)
+    print(f"Rows removed: {rows_removed}")
+    print(f"Rows after cleaning: {len(cleaned_df)}")
 
     return cleaned_df
 
@@ -99,7 +107,8 @@ def clean_keywords(df):
     Returns:
         cleaned_df: DataFrame with rows having valid keywords
     """
-    print(f"Original keywords rows: {len(df)}")
+    original_rows = len(df)
+    print(f"Original keywords rows: {original_rows}")
 
     # Parse keywords to check if empty
     df['keywords_parsed'] = df['keywords'].apply(lambda x: ast.literal_eval(x) if pd.notnull(x) and x != '' else [])
@@ -110,7 +119,9 @@ def clean_keywords(df):
     cleaned_df = df[valid_keywords_mask].copy()
     cleaned_df = cleaned_df.drop(columns=['keywords_parsed'])  # Remove temporary column
 
-    print(f"Cleaned keywords rows: {len(cleaned_df)} (removed {len(df) - len(cleaned_df)} rows with missing keywords)")
+    rows_removed = original_rows - len(cleaned_df)
+    print(f"Rows removed: {rows_removed}")
+    print(f"Rows after cleaning: {len(cleaned_df)}")
 
     return cleaned_df
 
@@ -171,6 +182,7 @@ if __name__ == '__main__':
         if data_path.exists():
             print(f"\nProcessing {input_file}...")
             df = pd.read_csv(data_path, low_memory=False)
+            original_rows = len(df)
 
             if input_file == 'movies_metadata.csv':
                 cleaned_df = clean_movies_runtime(df)
@@ -183,6 +195,9 @@ if __name__ == '__main__':
                 save_cleaned_keywords(cleaned_df, output_file)
             else:
                 # For other files, just save as is (no cleaning specified)
+                print(f"Original {input_file} rows: {original_rows}")
+                print(f"Rows removed: 0")
+                print(f"Rows after cleaning: {original_rows}")
                 output_path = Path(output_file)
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 df.to_csv(output_path, index=False)
