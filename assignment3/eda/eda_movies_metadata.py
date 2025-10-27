@@ -156,6 +156,32 @@ def analyze_movies_metadata_specific(df):
     genre_vote_stats.columns = ['Avg Vote', 'Median Vote', 'Movie Count']
     print(tabulate(genre_vote_stats, headers='keys', tablefmt='grid', floatfmt='.2f'))
 
+    # Analyze the 12 invalid "genres" (production companies)
+    print("\n=== Invalid Genre Entries (Production Companies) ===")
+    df_invalid = df.explode('genres_list')
+    df_invalid = df_invalid[df_invalid['genres_list'].notna() & (df_invalid['genres_list'] != '')]
+    df_invalid = df_invalid[df_invalid['genres_list'].isin(invalid_genres)]
+    
+    if len(df_invalid) > 0:
+        print(f"Found {len(df_invalid)} entries with invalid genres")
+        print("\nRuntime and Vote Statistics for Invalid Genres:")
+        invalid_stats = df_invalid.groupby('genres_list').agg({
+            'runtime': ['mean', 'median', 'count'],
+            'vote_average': ['mean', 'median']
+        })
+        invalid_stats.columns = ['Avg Runtime', 'Median Runtime', 'Movie Count', 'Avg Vote', 'Median Vote']
+        print(tabulate(invalid_stats.sort_index(), headers='keys', tablefmt='grid', floatfmt='.2f'))
+        
+        print("\nSample movies with invalid genre entries:")
+        for invalid_genre in sorted(invalid_genres):
+            genre_movies = df_invalid[df_invalid['genres_list'] == invalid_genre]
+            if len(genre_movies) > 0:
+                sample = genre_movies.head(1)
+                for idx, row in sample.iterrows():
+                    print(f"  {invalid_genre}: ID={row['id']}, Title={row['title']}, Date={row['release_date']}")
+    else:
+        print("No movies found with invalid genre entries (expected - these are corrupted rows)")
+
     unique_statuses = df['status'].dropna().unique()
     print(f"Unique status values ({len(unique_statuses)}): {list(unique_statuses)}")
 
