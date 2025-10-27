@@ -6,20 +6,9 @@ import pandas as pd
 
 
 def clean_movies_runtime(df):
-    """
-    Clean movies with 0 runtime by assigning median runtime of their genre(s).
-    Also filter to only include released movies.
-
-    Args:
-        df: DataFrame with movies_metadata
-
-    Returns:
-        cleaned_df: DataFrame with cleaned runtime data and only released movies
-    """
     original_rows = len(df)
     print(f"Original movies_metadata rows: {original_rows}")
 
-    # First filter to only released movies
     df = df[df['status'] == 'Released'].copy()
     rows_removed = original_rows - len(df)
     print(f"Rows removed (non-released movies): {rows_removed}")
@@ -31,7 +20,6 @@ def clean_movies_runtime(df):
     if zero_runtime_mask.sum() > 0:
         print(f"Cleaning {zero_runtime_mask.sum()} movies with 0 runtime...")
 
-        # Parse genres if not already done
         if 'genres_list' not in cleaned_df.columns:
             def extract_genres(genre_str):
                 try:
@@ -41,13 +29,11 @@ def clean_movies_runtime(df):
                     return []
             cleaned_df['genres_list'] = cleaned_df['genres'].apply(extract_genres)
 
-        # Calculate median runtime by genre
         genre_medians = {}
         for genre_list in cleaned_df['genres_list']:
             if genre_list:
                 for genre in genre_list:
                     if genre not in genre_medians:
-                        # Find median runtime for this genre (excluding 0 runtime movies)
                         genre_movies = cleaned_df[
                             (cleaned_df['genres_list'].apply(lambda x: genre in x if x else False)) &
                             (cleaned_df['runtime'] > 0)
@@ -55,13 +41,10 @@ def clean_movies_runtime(df):
                         if not genre_movies.empty:
                             genre_medians[genre] = genre_movies['runtime'].median()
 
-        # Assign median runtime based on genres
         for idx in cleaned_df[zero_runtime_mask].index:
             movie_genres = cleaned_df.loc[idx, 'genres_list']
             if movie_genres:
-                # Get medians for all genres of this movie
                 genre_runtimes = [genre_medians.get(genre, np.nan) for genre in movie_genres]
-                # Use the median of available genre medians
                 valid_runtimes = [rt for rt in genre_runtimes if not np.isnan(rt)]
                 if valid_runtimes:
                     median_runtime = np.median(valid_runtimes)
@@ -71,26 +54,13 @@ def clean_movies_runtime(df):
 
 
 def fix_vote_counts(df, ratings_df, links_df):
-    """
-    Fix all vote counts in movies_metadata by calculating actual counts from ratings data.
-    
-    Args:
-        df: DataFrame with movies_metadata (uses 'id' which is TMDb ID)
-        ratings_df: DataFrame with ratings data (uses 'movieId' from links)
-        links_df: DataFrame to map tmdbId (= movies.id) to movieId (= ratings.movieId)
-    
-    Returns:
-        df: DataFrame with corrected vote_count values
-    """
     print("\n" + "="*70)
     print("Calculating actual vote counts from ratings...")
     print("="*70)
-    
-    # Count ratings by movieId
+
     ratings_counts = ratings_df.groupby('movieId').size().to_dict()
     print(f"Calculated vote counts for {len(ratings_counts)} unique movieIds")
-    
-    # Convert links DataFrame types
+
     links_df_converted = links_df.copy()
     links_df_converted['tmdbId'] = pd.to_numeric(links_df_converted['tmdbId'], errors='coerce')
     links_df_converted['movieId'] = pd.to_numeric(links_df_converted['movieId'], errors='coerce')
@@ -98,44 +68,40 @@ def fix_vote_counts(df, ratings_df, links_df):
     links_df_converted['tmdbId'] = links_df_converted['tmdbId'].astype(int)
     links_df_converted['movieId'] = links_df_converted['movieId'].astype(int)
     print(f"Mapped vote counts for {len(links_df_converted)} unique tmdbIds")
-    
-    # Create mapping from tmdbId to vote count
+
     vote_counts = {}
     for _, link_row in links_df_converted.iterrows():
         tmdb_id = link_row['tmdbId']
         movie_id = link_row['movieId']
-        
+
         if movie_id in ratings_counts:
-            # If multiple movieIds map to same tmdbId, sum the ratings
             if tmdb_id in vote_counts:
                 vote_counts[tmdb_id] += ratings_counts[movie_id]
             else:
                 vote_counts[tmdb_id] = ratings_counts[movie_id]
-    
+
     print(f"Mapped vote counts for {len(vote_counts)} movies (tmdbId -> movieId -> ratings)")
-    
-    # Now fix vote_count in the dataframe
+
     df['id_int'] = pd.to_numeric(df['id'], errors='coerce').astype('Int64')
-    
-    # Track statistics
+
     correct_count = 0
     incorrect_count = 0
     missing_count = 0
     not_in_ratings = 0
-    
+
     df['vote_count'] = pd.to_numeric(df['vote_count'], errors='coerce')
-    
+
     for idx, row in df.iterrows():
         tmdb_id = row['id_int']
-        
+
         if pd.isna(tmdb_id):
             missing_count += 1
             continue
-            
+
         if tmdb_id in vote_counts:
             actual_count = vote_counts[tmdb_id]
             csv_count = row['vote_count']
-            
+
             if pd.notna(csv_count) and int(csv_count) == actual_count:
                 correct_count += 1
             else:
@@ -143,12 +109,11 @@ def fix_vote_counts(df, ratings_df, links_df):
                 df.at[idx, 'vote_count'] = actual_count
         else:
             not_in_ratings += 1
-            # Movie not in ratings, keep original value or set to 0
             if pd.isna(row['vote_count']):
                 df.at[idx, 'vote_count'] = 0
-    
+
     df = df.drop(columns=['id_int'])
-    
+
     print("\n" + "="*70)
     print("SUMMARY STATISTICS - BEFORE FIXING")
     print("="*70)
@@ -160,27 +125,26 @@ def fix_vote_counts(df, ratings_df, links_df):
     print(f"Incorrect vote_count:   {incorrect_count} ({incorrect_count/len(df)*100:.1f}%) - FIXED")
     print(f"Missing vote_count:     {missing_count} ({missing_count/len(df)*100:.1f}%)")
     print("="*70)
-    
-    # Now verify the fixed data
+
     print("\n" + "="*70)
     print("VERIFYING FIXED VOTE COUNTS...")
     print("="*70)
-    
+
     df['id_int'] = pd.to_numeric(df['id'], errors='coerce').astype('Int64')
-    
+
     verified_correct = 0
     verified_incorrect = 0
     verified_missing = 0
     verified_not_in_ratings = 0
-    
+
     for idx, row in df.iterrows():
         tmdb_id = row['id_int']
         csv_count = row['vote_count']
-        
+
         if pd.isna(tmdb_id):
             verified_missing += 1
             continue
-            
+
         if tmdb_id in vote_counts:
             actual_count = vote_counts[tmdb_id]
             if pd.notna(csv_count) and int(csv_count) == actual_count:
@@ -189,9 +153,9 @@ def fix_vote_counts(df, ratings_df, links_df):
                 verified_incorrect += 1
         else:
             verified_not_in_ratings += 1
-    
+
     df = df.drop(columns=['id_int'])
-    
+
     print("\n" + "="*70)
     print("SUMMARY STATISTICS - AFTER FIXING")
     print("="*70)
@@ -203,49 +167,30 @@ def fix_vote_counts(df, ratings_df, links_df):
     print(f"[X]  Incorrect vote_count:   {verified_incorrect} ({verified_incorrect/len(df)*100:.1f}%)")
     print(f"[!]  Missing vote_count:     {verified_missing} ({verified_missing/len(df)*100:.1f}%)")
     print("="*70)
-    
+
     if verified_incorrect == 0 and verified_missing == 0:
         print("SUCCESS! All vote counts have been fixed correctly!")
     else:
         print(f"WARNING: {verified_incorrect + verified_missing} vote counts still need attention")
     print("="*70)
-    
+
     return df
 
 
 def merge_duplicate_movies(df, ratings_df=None, links_df=None):
-    """
-    Merge duplicate movie entries by:
-    - Averaging popularity values
-    - Calculating vote_count from ratings_df using links_df mapping
-    - Keeping first occurrence for other fields
-
-    Args:
-        df: DataFrame with movies_metadata (uses 'id' which is TMDb ID)
-        ratings_df: DataFrame with ratings data (uses 'movieId' from links)
-        links_df: DataFrame to map tmdbId (= movies.id) to movieId (= ratings.movieId)
-
-    Returns:
-        cleaned_df: DataFrame with duplicates merged
-    """
     print(f"\nChecking for duplicate movie IDs...")
     initial_count = len(df)
 
-    # Convert popularity to numeric, handling any string concatenation issues
     df['popularity'] = pd.to_numeric(df['popularity'], errors='coerce')
 
-    # Calculate actual vote counts from ratings if available
-    # Mapping: movies.id (tmdbId) -> links.tmdbId -> links.movieId -> ratings.movieId
     vote_counts = {}
     links_df_converted = None
 
     if ratings_df is not None and links_df is not None:
         print("Calculating vote counts from ratings data...")
-        # Count ratings by movieId
         ratings_counts = ratings_df.groupby('movieId').size().to_dict()
         print(f"Calculated {len(ratings_counts)} vote counts from ratings")
 
-        # Convert links DataFrame types once
         print("Converting links DataFrame types...")
         links_df_converted = links_df.copy()
         links_df_converted['tmdbId'] = pd.to_numeric(links_df_converted['tmdbId'], errors='coerce')
@@ -254,21 +199,17 @@ def merge_duplicate_movies(df, ratings_df=None, links_df=None):
         links_df_converted['tmdbId'] = links_df_converted['tmdbId'].astype(int)
         links_df_converted['movieId'] = links_df_converted['movieId'].astype(int)
 
-        # Debug: Check if 105045 is in the converted links
         test_match = links_df_converted[links_df_converted['tmdbId'] == 105045]
         print(f"DEBUG: tmdbId 105045 found in links? {len(test_match)} matches")
         if len(test_match) > 0:
             print(f"  Sample rows: {test_match[['movieId', 'tmdbId']].head()}")
 
-        # Map tmdbId to movieId using links
         print("Mapping tmdbId to movieId using links...")
         for _, link_row in links_df_converted.iterrows():
             tmdb_id = link_row['tmdbId']
             movie_id = link_row['movieId']
 
             if movie_id in ratings_counts:
-                # Map tmdbId (which is movies.id) to vote count
-                # If multiple movieIds map to same tmdbId, sum the ratings
                 if tmdb_id in vote_counts:
                     vote_counts[tmdb_id] += ratings_counts[movie_id]
                 else:
@@ -276,7 +217,6 @@ def merge_duplicate_movies(df, ratings_df=None, links_df=None):
 
         print(f"Mapped vote counts for {len(vote_counts)} movies (tmdbId -> movieId -> ratings)")
 
-    # Find duplicates
     duplicates = df[df.duplicated(subset=['id'], keep=False)]
 
     if len(duplicates) == 0:
@@ -286,52 +226,40 @@ def merge_duplicate_movies(df, ratings_df=None, links_df=None):
     duplicate_ids = duplicates['id'].unique()
     print(f"Found {len(duplicate_ids)} unique movie IDs with duplicates")
 
-    # Group by id and merge
     merged_rows = []
 
     for movie_id_str in duplicate_ids:
-        # Convert to int for vote_counts lookup, but keep string for DataFrame filtering
         movie_id = int(float(movie_id_str))
         dup_rows = df[df['id'] == movie_id_str].copy()
 
         if len(dup_rows) > 1:
-            # Take first row as base
             merged = dup_rows.iloc[0].copy()
 
-            # Debug
             if movie_id == 105045:
                 print(f"  DEBUG 105045: Processing duplicate, {len(dup_rows)} rows")
                 print(f"  DEBUG 105045: vote_count in vote_counts? {movie_id in vote_counts}")
 
-            # Average popularity across all duplicates (only if they differ)
             popularity_values = dup_rows['popularity'].dropna()
             if len(popularity_values) > 1:
                 unique_popularity = popularity_values.unique()
                 if len(unique_popularity) > 1:
-                    # Values differ, so average them
                     merged['popularity'] = popularity_values.mean()
                     print(f"  ID {movie_id}: Averaged popularity from {list(popularity_values)} to {merged['popularity']:.6f}")
-                # else: values are identical, keep first (already in merged)
 
-            # Handle vote_count: only use ratings if the duplicate rows have conflicting values
             vote_count_values = dup_rows['vote_count'].dropna()
             if len(vote_count_values) > 1:
                 unique_vote_counts = vote_count_values.unique()
                 if len(unique_vote_counts) > 1:
-                    # Values differ - calculate from ratings if available, otherwise average
                     if movie_id in vote_counts:
                         old_vote_counts = list(vote_count_values)
                         merged['vote_count'] = vote_counts[movie_id]
                         print(f"  ID {movie_id}: Set vote_count to {merged['vote_count']} from ratings (CSV had conflicting {old_vote_counts})")
                     else:
-                        # No ratings data available, so average the conflicting values
                         merged['vote_count'] = int(vote_count_values.mean())
                         print(f"  ID {movie_id}: Averaged vote_count from {list(vote_count_values)} to {merged['vote_count']} (no ratings data)")
-                # else: values are identical, keep first (already in merged)
 
             merged_rows.append(merged)
 
-    # Remove all duplicate rows and add merged ones
     df_no_dupes = df[~df['id'].isin(duplicate_ids)].copy()
     merged_df = pd.concat([df_no_dupes, pd.DataFrame(merged_rows)], ignore_index=True)
 
@@ -342,22 +270,9 @@ def merge_duplicate_movies(df, ratings_df=None, links_df=None):
 
 
 def merge_duplicate_credits(df):
-    """
-    Merge duplicate credit entries by:
-    - Merging crew lists (keeping unique crew members)
-    - Merging cast lists (keeping unique cast members)
-    - Showing differences when crew differs
-
-    Args:
-        df: DataFrame with credits data
-
-    Returns:
-        cleaned_df: DataFrame with duplicates merged
-    """
     print(f"\nChecking for duplicate credit IDs...")
     initial_count = len(df)
 
-    # Find duplicates
     duplicates = df[df.duplicated(subset=['id'], keep=False)]
 
     if len(duplicates) == 0:
@@ -367,37 +282,32 @@ def merge_duplicate_credits(df):
     duplicate_ids = duplicates['id'].unique()
     print(f"Found {len(duplicate_ids)} unique credit IDs with duplicates")
 
-    # Group by id and merge
     merged_rows = []
 
     for credit_id in duplicate_ids:
         dup_rows = df[df['id'] == credit_id].copy()
 
         if len(dup_rows) > 1:
-            # Parse cast and crew
             all_cast = []
             all_crew = []
 
-            for idx, row in dup_rows.iterrows():
+            for _, row in dup_rows.iterrows():
                 cast = ast.literal_eval(row['cast']) if pd.notna(row['cast']) and row['cast'] != '' else []
                 crew = ast.literal_eval(row['crew']) if pd.notna(row['crew']) and row['crew'] != '' else []
                 all_cast.extend(cast)
                 all_crew.extend(crew)
 
-            # Check if crew differs between occurrences and show detailed diff
             crew_lists = []
-            for idx, row in dup_rows.iterrows():
+            for _, row in dup_rows.iterrows():
                 crew = ast.literal_eval(row['crew']) if pd.notna(row['crew']) and row['crew'] != '' else []
                 crew_lists.append(crew)
 
             if len(set(str(sorted(c, key=lambda x: x.get('credit_id', ''))) for c in crew_lists)) > 1:
-                print(f"\n  🎬 ID {credit_id}: Crew differs between occurrences")
+                print(f"\n  ID {credit_id}: Crew differs between occurrences")
 
-                # Show crew members in each occurrence
                 for i, crew_list in enumerate(crew_lists, 1):
                     print(f"    Occurrence {i}: {len(crew_list)} crew members")
 
-                # Show the differences
                 if len(crew_lists) == 2:
                     crew1_ids = {c.get('credit_id'): c for c in crew_lists[0] if c.get('credit_id')}
                     crew2_ids = {c.get('credit_id'): c for c in crew_lists[1] if c.get('credit_id')}
@@ -421,7 +331,6 @@ def merge_duplicate_credits(df):
                         if len(only_in_2) > 5:
                             print(f"      ... and {len(only_in_2) - 5} more")
 
-            # Remove duplicates from cast and crew based on credit_id
             seen_cast_ids = set()
             unique_cast = []
             for person in all_cast:
@@ -438,7 +347,6 @@ def merge_duplicate_credits(df):
                     seen_crew_ids.add(credit_id_key)
                     unique_crew.append(person)
 
-            # Create merged row
             merged = dup_rows.iloc[0].copy()
             merged['cast'] = str(unique_cast)
             merged['crew'] = str(unique_crew)
@@ -448,7 +356,6 @@ def merge_duplicate_credits(df):
 
             merged_rows.append(merged)
 
-    # Remove all duplicate rows and add merged ones
     df_no_dupes = df[~df['id'].isin(duplicate_ids)].copy()
     merged_df = pd.concat([df_no_dupes, pd.DataFrame(merged_rows)], ignore_index=True)
 
@@ -458,26 +365,15 @@ def merge_duplicate_credits(df):
     return merged_df
 
 def clean_credits_crew(df):
-    """
-    Clean credits by removing rows with empty or missing crew.
-
-    Args:
-        df: DataFrame with credits data
-
-    Returns:
-        cleaned_df: DataFrame with rows having valid crew
-    """
     original_rows = len(df)
     print(f"Original credits rows: {original_rows}")
 
-    # Parse crew to check if empty
     df['crew_parsed'] = df['crew'].apply(lambda x: ast.literal_eval(x) if pd.notnull(x) and x != '' else [])
 
-    # Keep rows where crew is not null, not empty string, and not empty array
     valid_crew_mask = ~((df['crew'].isnull() | (df['crew'] == '') | (df['crew_parsed'].apply(lambda x: len(x) == 0))))
 
     cleaned_df = df[valid_crew_mask].copy()
-    cleaned_df = cleaned_df.drop(columns=['crew_parsed'])  # Remove temporary column
+    cleaned_df = cleaned_df.drop(columns=['crew_parsed'])
 
     rows_removed = original_rows - len(cleaned_df)
     print(f"Rows removed: {rows_removed}")
@@ -486,27 +382,15 @@ def clean_credits_crew(df):
     return cleaned_df
 
 def clean_keywords(df):
-    """
-    Clean keywords by removing rows with empty or missing keywords,
-    and remove duplicates.
-
-    Args:
-        df: DataFrame with keywords data
-
-    Returns:
-        cleaned_df: DataFrame with rows having valid keywords and no duplicates
-    """
     original_rows = len(df)
     print(f"Original keywords rows: {original_rows}")
 
-    # Parse keywords to check if empty
     df['keywords_parsed'] = df['keywords'].apply(lambda x: ast.literal_eval(x) if pd.notnull(x) and x != '' else [])
 
-    # Keep rows where keywords is not null, not empty string, and not empty array
     valid_keywords_mask = ~((df['keywords'].isnull() | (df['keywords'] == '') | (df['keywords_parsed'].apply(lambda x: len(x) == 0))))
 
     cleaned_df = df[valid_keywords_mask].copy()
-    cleaned_df = cleaned_df.drop(columns=['keywords_parsed'])  # Remove temporary column
+    cleaned_df = cleaned_df.drop(columns=['keywords_parsed'])
 
     rows_removed = original_rows - len(cleaned_df)
     print(f"Rows removed: {rows_removed}")
@@ -514,7 +398,6 @@ def clean_keywords(df):
 
     print(f"After removing empty keywords: {len(cleaned_df)} rows (removed {len(df) - len(cleaned_df)} rows)")
 
-    # Check for duplicates
     initial_count = len(cleaned_df)
     duplicate_mask = cleaned_df.duplicated(subset=['id'], keep='first')
     if duplicate_mask.sum() > 0:
@@ -527,15 +410,6 @@ def clean_keywords(df):
 
 
 def clean_links(df):
-    """
-    Remove duplicate links based on movieId.
-
-    Args:
-        df: DataFrame with links data
-
-    Returns:
-        cleaned_df: DataFrame with no duplicates
-    """
     print(f"Original links rows: {len(df)}")
 
     initial_count = len(df)
@@ -553,23 +427,11 @@ def clean_links(df):
 
 
 def clean_ratings(df):
-    """
-    Remove duplicate ratings based on (userId, movieId).
-    Keep the most recent rating (highest timestamp).
-
-    Args:
-        df: DataFrame with ratings data
-
-    Returns:
-        cleaned_df: DataFrame with no duplicates
-    """
     print(f"Original ratings rows: {len(df)}")
 
     initial_count = len(df)
-    # Sort by timestamp descending to keep most recent
     df_sorted = df.sort_values('timestamp', ascending=False)
 
-    # Remove duplicates, keeping first (most recent due to sorting)
     duplicate_mask = df_sorted.duplicated(subset=['userId', 'movieId'], keep='first')
     if duplicate_mask.sum() > 0:
         print(f"Found {duplicate_mask.sum()} duplicate rating entries")
@@ -583,46 +445,24 @@ def clean_ratings(df):
     return cleaned_df
 
 def save_cleaned_credits(df, output_path='data/movies_cleaned/credits_cleaned.csv'):
-    """
-    Save cleaned credits dataframe to CSV.
-
-    Args:
-        df: Cleaned DataFrame
-        output_path: Path to save the CSV
-    """
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_file, index=False)
     print(f"Cleaned credits saved to {output_file}")
 
 def save_cleaned_keywords(df, output_path='data/movies_cleaned/keywords_cleaned.csv'):
-    """
-    Save cleaned keywords dataframe to CSV.
-
-    Args:
-        df: Cleaned DataFrame
-        output_path: Path to save the CSV
-    """
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_file, index=False)
     print(f"Cleaned keywords saved to {output_file}")
 
 def save_cleaned_movies(df, output_path='data/movies_cleaned/movies_metadata_cleaned.csv'):
-    """
-    Save cleaned movies dataframe to CSV.
-
-    Args:
-        df: Cleaned DataFrame
-        output_path: Path to save the CSV
-    """
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_file, index=False)
     print(f"Cleaned data saved to {output_file}")
 
 if __name__ == '__main__':
-    # Define data files
     data_files = {
         'movies_metadata.csv': 'data/movies_cleaned/movies_metadata_cleaned.csv',
         'credits.csv': 'data/movies_cleaned/credits_cleaned.csv',
@@ -633,7 +473,6 @@ if __name__ == '__main__':
         'ratings_small.csv': 'data/movies_cleaned/ratings_small_cleaned.csv'
     }
 
-    # First, load ratings and links to calculate accurate vote counts
     ratings_df = None
     links_df = None
 
@@ -649,7 +488,6 @@ if __name__ == '__main__':
         links_df = pd.read_csv(links_path, low_memory=False)
         print(f"Loaded {len(links_df)} links")
 
-    # Load and clean each dataset
     for input_file, output_file in data_files.items():
         data_path = Path('data/movies') / input_file
         if data_path.exists():
@@ -660,18 +498,14 @@ if __name__ == '__main__':
             original_rows = len(df)
 
             if input_file == 'movies_metadata.csv':
-                # First clean runtime and filter released movies
                 cleaned_df = clean_movies_runtime(df)
-                # Fix all vote counts using actual ratings data
                 if ratings_df is not None and links_df is not None:
                     cleaned_df = fix_vote_counts(cleaned_df, ratings_df, links_df)
                 else:
                     print("WARNING: ratings or links data not available, skipping vote count correction")
-                # Then merge duplicates (pass ratings and links for accurate vote counts)
                 cleaned_df = merge_duplicate_movies(cleaned_df, ratings_df, links_df)
                 save_cleaned_movies(cleaned_df, output_file)
             elif input_file == 'credits.csv':
-                # Clean crew and merge duplicates
                 cleaned_df = clean_credits_crew(df)
                 cleaned_df = merge_duplicate_credits(cleaned_df)
                 save_cleaned_credits(cleaned_df, output_file)
@@ -691,7 +525,6 @@ if __name__ == '__main__':
                 cleaned_df.to_csv(output_path, index=False)
                 print(f"Cleaned data saved to {output_path}")
             else:
-                # For other files, just save as is (no cleaning specified)
                 print(f"Original {input_file} rows: {original_rows}")
                 print(f"Rows removed: 0")
                 print(f"Rows after cleaning: {original_rows}")
