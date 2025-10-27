@@ -1,26 +1,13 @@
-"""
-Query 7: Top 20 movies matching "noir" or "neo-noir" in overview/tagline
-Filter: vote_count ≥ 50, sorted by vote_average (desc)
-"""
-
-import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import json
-
+sys.path.append('..')
 from DbConnector import DbConnector
 
 
 def run_query():
     db_connector = DbConnector(DATABASE='assignment3')
     db = db_connector.db
-
-    # Note: Using regex instead of text search for more reliable matching
-    # Text search was missing some results due to indexing/stemming issues
     pipeline = [
-        # Match movies with "noir" in overview or tagline (case-insensitive)
         {'$match': {
             '$or': [
                 {'overview': {'$regex': 'noir', '$options': 'i'}},
@@ -29,7 +16,6 @@ def run_query():
             'vote_count': {'$gte': 50}
         }},
 
-        # Extract year from release_date
         {'$addFields': {
             'year': {
                 '$cond': {
@@ -43,10 +29,8 @@ def run_query():
             }
         }},
 
-        # Sort by vote_average descending
         {'$sort': {'vote_average': -1}},
 
-        # Limit to top 20
         {'$limit': 20},
 
         # Format output
@@ -62,7 +46,6 @@ def run_query():
 
     results = list(db.movies.aggregate(pipeline))
 
-    # Print results
     print("\n" + "="*100)
     print("Query 7: Top 20 'Noir' Movies (vote_count ≥ 50) by Vote Average")
     print("="*100)

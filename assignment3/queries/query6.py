@@ -1,15 +1,6 @@
-"""
-Query 6: Proportion of female cast in top 5 billed positions, aggregated by decade
-Sorted by average female proportion (desc)
-"""
-
-import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import json
-
+sys.path.append('..')
 from DbConnector import DbConnector
 
 
@@ -18,7 +9,6 @@ def run_query():
     db = db_connector.db
 
     pipeline = [
-        # Lookup movie details
         {'$lookup': {
             'from': 'movies',
             'localField': 'id',
@@ -28,20 +18,17 @@ def run_query():
 
         {'$unwind': '$movie'},
 
-        # Filter movies with release_date
         {'$match': {
             'movie.release_date': {'$ne': None, '$exists': True}
         }},
 
-        # Unwind cast and filter top 5 by order
         {'$unwind': '$cast'},
 
         {'$match': {
-            'cast.order': {'$lte': 4},  # 0-4 = top 5
-            'cast.gender': {'$in': [1, 2]}  # 1 = female, 2 = male
+            'cast.order': {'$lte': 4},
+            'cast.gender': {'$in': [1, 2]}
         }},
 
-        # Extract decade
         {'$addFields': {
             'year': {
                 '$toInt': {
@@ -59,7 +46,6 @@ def run_query():
             }
         }},
 
-        # Group by movie and decade
         {'$group': {
             '_id': {
                 'movie_id': '$id',
@@ -73,21 +59,18 @@ def run_query():
             'total_count': {'$sum': 1}
         }},
 
-        # Calculate female proportion per movie
         {'$addFields': {
             'female_proportion': {
                 '$divide': ['$female_count', '$total_count']
             }
         }},
 
-        # Group by decade
         {'$group': {
             '_id': '$_id.decade',
             'movie_count': {'$sum': 1},
             'avg_female_proportion': {'$avg': '$female_proportion'}
         }},
 
-        # Sort by average female proportion descending
         {'$sort': {'avg_female_proportion': -1}},
 
         # Format output
@@ -101,7 +84,6 @@ def run_query():
 
     results = list(db.credits.aggregate(pipeline))
 
-    # Print results
     print("\n" + "="*80)
     print("Query 6: Average Female Proportion in Top 5 Cast by Decade")
     print("="*80)
@@ -124,7 +106,3 @@ def run_query():
 
 if __name__ == '__main__':
     results = run_query()
-
-    # Optionally save to JSON
-    with open('queries/results/query6_results.json', 'w') as f:
-        json.dump(results, f, indent=2)

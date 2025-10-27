@@ -1,15 +1,6 @@
-"""
-Query 10: User statistics - ratings count, variance, and genre diversity
-Top 10 most genre-diverse users and top 10 highest-variance users (≥20 ratings)
-"""
-
-import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import json
-
+sys.path.append('..')
 from DbConnector import DbConnector
 
 
@@ -17,9 +8,7 @@ def run_query():
     db_connector = DbConnector(DATABASE='assignment3')
     db = db_connector.db
 
-    # Pipeline for all user statistics
     pipeline = [
-        # Lookup movie details to get genres
         {'$lookup': {
             'from': 'movies',
             'localField': 'movieId',
@@ -29,13 +18,11 @@ def run_query():
 
         {'$unwind': '$movie'},
 
-        # Unwind genres for genre counting
         {'$unwind': {
             'path': '$movie.genres_list',
             'preserveNullAndEmptyArrays': True
         }},
 
-        # Group by user
         {'$group': {
             '_id': '$userId',
             'ratings_count': {'$sum': 1},
@@ -43,16 +30,13 @@ def run_query():
             'genres': {'$addToSet': '$movie.genres_list'}
         }},
 
-        # Filter users with ≥20 ratings
         {'$match': {'ratings_count': {'$gte': 20}}},
 
-        # Calculate variance and genre diversity
         {'$addFields': {
             'mean_rating': {'$avg': '$ratings'},
             'genre_count': {'$size': '$genres'}
         }},
 
-        # Calculate population variance
         {'$addFields': {
             'variance': {
                 '$divide': [
@@ -88,13 +72,10 @@ def run_query():
 
     all_users = list(db.ratings.aggregate(pipeline))
 
-    # Sort for top genre-diverse users
     genre_diverse = sorted(all_users, key=lambda x: x['genre_count'], reverse=True)[:10]
 
-    # Sort for top variance users
     high_variance = sorted(all_users, key=lambda x: x['variance'], reverse=True)[:10]
 
-    # Print results
     print("\n" + "="*100)
     print("Query 10: User Rating Statistics (≥20 ratings)")
     print("="*100)
@@ -133,7 +114,3 @@ def run_query():
 
 if __name__ == '__main__':
     results = run_query()
-
-    # Optionally save to JSON
-    with open('queries/results/query10_results.json', 'w') as f:
-        json.dump(results, f, indent=2)

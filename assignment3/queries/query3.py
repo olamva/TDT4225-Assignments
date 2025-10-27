@@ -1,15 +1,6 @@
-"""
-Query 3: Top 10 actors (≥10 credited movies) with widest genre breadth
-Report distinct genres count and up to 5 example genres
-"""
-
-import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import json
-
+sys.path.append('..')
 from DbConnector import DbConnector
 
 
@@ -18,10 +9,8 @@ def run_query():
     db = db_connector.db
 
     pipeline = [
-        # Unwind cast array
         {'$unwind': '$cast'},
 
-        # Lookup movie details
         {'$lookup': {
             'from': 'movies',
             'localField': 'id',
@@ -31,7 +20,6 @@ def run_query():
 
         {'$unwind': '$movie'},
 
-        # Unwind genres_list
         {'$unwind': '$movie.genres_list'},
 
         # Group by actor
@@ -44,19 +32,15 @@ def run_query():
             'genres': {'$addToSet': '$movie.genres_list'}
         }},
 
-        # Filter actors with ≥10 movies
         {'$match': {'movie_count': {'$gte': 10}}},
 
-        # Calculate genre breadth
         {'$addFields': {
             'genre_count': {'$size': '$genres'},
             'example_genres': {'$slice': ['$genres', 5]}
         }},
 
-        # Sort by genre count descending
         {'$sort': {'genre_count': -1, 'movie_count': -1}},
 
-        # Limit to top 10
         {'$limit': 10},
 
         # Format output
@@ -71,7 +55,6 @@ def run_query():
 
     results = list(db.credits.aggregate(pipeline))
 
-    # Print results
     print("\n" + "="*120)
     print("Query 3: Top 10 Actors (≥10 movies) with Widest Genre Breadth")
     print("="*120)
@@ -94,7 +77,3 @@ def run_query():
 
 if __name__ == '__main__':
     results = run_query()
-
-    # Optionally save to JSON
-    with open('queries/results/query3_results.json', 'w') as f:
-        json.dump(results, f, indent=2)

@@ -1,16 +1,10 @@
-#!/usr/bin/env python3
-"""
-Run all EDA analyses sequentially.
-"""
-
 import subprocess
 import sys
 from pathlib import Path
 
 
 def run_eda_script(script_name):
-    """Run a single EDA script."""
-    script_path = Path(__file__).parent / script_name
+    script_path = Path(__file__).parent / f"{script_name}.py"
     script_dir = script_path.parent
     if script_path.exists():
         print(f"\n{'='*50}")
@@ -29,15 +23,14 @@ def run_eda_script(script_name):
         print(f"Script {script_name} not found")
 
 def main():
-    """Run all EDA scripts."""
     eda_scripts = [
-        'eda_movies_metadata.py',
-        'eda_credits.py',
-        'eda_keywords.py',
-        'eda_links.py',
-        'eda_links_small.py',
-        'eda_ratings.py',
-        'eda_ratings_small.py'
+        'eda_movies_metadata',
+        'eda_credits',
+        'eda_keywords',
+        'eda_links',
+        'eda_links_small',
+        'eda_ratings',
+        'eda_ratings_small'
     ]
 
     print("Running all EDA analyses...")

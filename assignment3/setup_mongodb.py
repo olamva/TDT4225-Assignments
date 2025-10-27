@@ -17,16 +17,11 @@ from tqdm import tqdm
 
 
 def create_collections():
-    """
-    Create MongoDB collections with appropriate schema validation and indexes
-    """
-    # Connect to MongoDB
     db_connector = DbConnector(DATABASE='assignment3')
     db = db_connector.db
 
     print("Creating collections in 'assignment3' database...\n")
 
-    # Drop existing collections if they exist (for clean setup)
     existing_collections = db.list_collection_names()
     for collection in ['movies', 'people', 'credits', 'ratings']:
         if collection in existing_collections:
@@ -37,8 +32,6 @@ def create_collections():
     print("Creating new collections...")
     print("="*50 + "\n")
 
-    # 1. Movies Collection
-    # Based on movies_metadata_cleaned.csv columns
     movies_validator = {
         '$jsonSchema': {
             'bsonType': 'object',
@@ -83,10 +76,7 @@ def create_collections():
     db.movies.create_index([('release_date', DESCENDING)])
     db.movies.create_index([('vote_average', DESCENDING)])
     db.movies.create_index([('tmdbId', ASCENDING)])
-    print("✓ Created 'movies' collection with indexes on: id (unique), title, release_date, vote_average, tmdbId")
 
-    # 2. People Collection
-    # Extracted from cast and crew data (profile_path removed)
     people_validator = {
         '$jsonSchema': {
             'bsonType': 'object',
@@ -108,10 +98,7 @@ def create_collections():
     db.create_collection('people', validator=people_validator)
     db.people.create_index([('id', ASCENDING)], unique=True)
     db.people.create_index([('name', ASCENDING)])
-    print("✓ Created 'people' collection with indexes on: id (unique), name")
 
-    # 3. Credits Collection
-    # Based on credits_cleaned.csv columns
     credits_validator = {
         '$jsonSchema': {
             'bsonType': 'object',
@@ -162,10 +149,7 @@ def create_collections():
     db.credits.create_index([('id', ASCENDING)], unique=True)
     db.credits.create_index([('cast.id', ASCENDING)])
     db.credits.create_index([('crew.id', ASCENDING)])
-    print("✓ Created 'credits' collection with indexes on: id (unique), cast.id, crew.id")
 
-    # 4. Ratings Collection
-    # Based on ratings_cleaned.csv columns
     ratings_validator = {
         '$jsonSchema': {
             'bsonType': 'object',
@@ -192,13 +176,11 @@ def create_collections():
     }
 
     db.create_collection('ratings', validator=ratings_validator)
-    # Compound index for efficient user-movie queries
     db.ratings.create_index([('userId', ASCENDING), ('movieId', ASCENDING)])
     db.ratings.create_index([('movieId', ASCENDING)])
     db.ratings.create_index([('userId', ASCENDING)])
     db.ratings.create_index([('rating', DESCENDING)])
     db.ratings.create_index([('timestamp', DESCENDING)])
-    print("✓ Created 'ratings' collection with indexes on: (userId, movieId) compound, movieId, userId, rating, timestamp")
 
     print("\n" + "="*50)
     print("Collection creation completed!")
@@ -217,12 +199,10 @@ def create_collections():
         for idx_name, idx_info in indexes.items():
             print(f"    - {idx_name}: {idx_info.get('key', [])}")
 
-    print("\n✓ Collections created successfully!")
     return db_connector
 
 
 def safe_eval(val):
-    """Safely evaluate string representations of lists/dicts"""
     if pd.isna(val) or val == '' or val == 'None':
         return None
     if isinstance(val, (list, dict)):
@@ -234,20 +214,15 @@ def safe_eval(val):
 
 
 def load_movies(db):
-    """Load movies from movies_metadata_cleaned.csv and merge tmdbId from links"""
     print("\n" + "="*60)
     print("Loading movies...")
     print("="*60)
 
-    # Load movies
     df = pd.read_csv('data/movies_cleaned/movies_metadata_cleaned.csv', low_memory=False)
 
-    # Load links to get tmdbId
     print("Loading links data to merge tmdbId...")
     links_df = pd.read_csv('data/movies_cleaned/links_cleaned.csv')
 
-    # Create a mapping from movie id to tmdbId
-    # Note: links has 'movieId' column, movies has 'id' column
     tmdb_mapping = {}
     for _, row in links_df.iterrows():
         movie_id = int(row['movieId']) if pd.notna(row['movieId']) else None
@@ -257,22 +232,17 @@ def load_movies(db):
 
     print(f"Loaded {len(tmdb_mapping)} tmdbId mappings from links")
 
-    # Find and report duplicates based on 'id' column
     initial_count = len(df)
     duplicate_ids = df[df.duplicated(subset=['id'], keep='first')]['id'].tolist()
 
     if duplicate_ids:
-        print(f"⚠ Found {len(duplicate_ids)} duplicate movie IDs:")
-        # Group duplicates and show differences
+        print(f"Found {len(duplicate_ids)} duplicate movie IDs:")
         for dup_id in sorted(set(duplicate_ids)):
             dup_rows = df[df['id'] == dup_id].reset_index(drop=True)
-            print(f"\n  📽️  ID {dup_id}: appears {len(dup_rows)} times")
-
-            # Show title for each occurrence
+            print(f"\n  ID {dup_id}: appears {len(dup_rows)} times")
             for i in range(len(dup_rows)):
                 print(f"      Occurrence {i+1}: {dup_rows.iloc[i]['title']}")
 
-            # Compare fields between occurrences
             if len(dup_rows) > 1:
                 print(f"      Differences:")
                 first_row = dup_rows.iloc[0]
@@ -282,7 +252,6 @@ def load_movies(db):
                     for col in dup_rows.columns:
                         val1 = first_row[col]
                         val2 = current_row[col]
-                        # Compare, handling NaN values
                         if pd.isna(val1) and pd.isna(val2):
                             continue
                         elif pd.isna(val1) or pd.isna(val2) or str(val1) != str(val2):
@@ -290,17 +259,15 @@ def load_movies(db):
 
                     if differences:
                         print(f"        Occurrence 1 vs {i+1}: {', '.join(differences)}")
-                        # Show specific field differences for all different fields
                         for field in differences:
-                            print(f"          • {field}: '{first_row[field]}' vs '{current_row[field]}'")
+                            print(f"          - {field}: '{first_row[field]}' vs '{current_row[field]}'")
                     else:
                         print(f"        Occurrence 1 vs {i+1}: Identical")
 
-    # Remove duplicates, keeping first occurrence
     df = df.drop_duplicates(subset=['id'], keep='first')
     duplicates_removed = initial_count - len(df)
     if duplicates_removed > 0:
-        print(f"\n✓ Removed {duplicates_removed} duplicate entries (keeping first occurrence)\n")
+        print(f"\n Removed {duplicates_removed} duplicate entries (keeping first occurrence)\n")
 
     movies = []
     seen_ids = set()
@@ -308,7 +275,6 @@ def load_movies(db):
     for _, row in tqdm(df.iterrows(), total=len(df), desc="Processing movies"):
         movie_id = int(row['id']) if pd.notna(row['id']) else None
 
-        # Skip if we've already seen this ID or if it's None
         if movie_id is None or movie_id in seen_ids:
             continue
 
@@ -347,30 +313,27 @@ def load_movies(db):
 
     if movies:
         result = db.movies.insert_many(movies, ordered=False)
-        print(f"✓ Inserted {len(result.inserted_ids)} movies")
+        print(f" Inserted {len(result.inserted_ids)} movies")
     else:
-        print("✗ No movies to insert")
+        print("No movies to insert")
 
 
 def load_credits(db):
-    """Load credits from credits_cleaned.csv"""
     print("\n" + "="*60)
     print("Loading credits...")
     print("="*60)
 
     df = pd.read_csv('data/movies_cleaned/credits_cleaned.csv')
 
-    # Find and report duplicates based on 'id' column
     initial_count = len(df)
     duplicate_ids = df[df.duplicated(subset=['id'], keep='first')]['id'].tolist()
 
     if duplicate_ids:
-        print(f"⚠ Found {len(duplicate_ids)} duplicate credit IDs:")
+        print(f"Found {len(duplicate_ids)} duplicate credit IDs:")
         for dup_id in sorted(set(duplicate_ids)):
             dup_rows = df[df['id'] == dup_id].reset_index(drop=True)
-            print(f"\n  🎬 ID {dup_id}: appears {len(dup_rows)} times")
+            print(f"\n ID {dup_id}: appears {len(dup_rows)} times")
 
-            # Compare cast and crew between occurrences
             if len(dup_rows) > 1:
                 first_row = dup_rows.iloc[0]
                 for i in range(1, len(dup_rows)):
@@ -392,11 +355,10 @@ def load_credits(db):
                     else:
                         print(f"      Occurrence 1 vs {i+1}: Identical")
 
-    # Remove duplicates, keeping first occurrence
     df = df.drop_duplicates(subset=['id'], keep='first')
     duplicates_removed = initial_count - len(df)
     if duplicates_removed > 0:
-        print(f"\n✓ Removed {duplicates_removed} duplicate entries (keeping first occurrence)\n")
+        print(f"\n Removed {duplicates_removed} duplicate entries (keeping first occurrence)\n")
 
     credits = []
     seen_ids = set()
@@ -404,7 +366,6 @@ def load_credits(db):
     for _, row in tqdm(df.iterrows(), total=len(df), desc="Processing credits"):
         credit_id = int(row['id']) if pd.notna(row['id']) else None
 
-        # Skip if we've already seen this ID or if it's None
         if credit_id is None or credit_id in seen_ids:
             continue
 
@@ -420,24 +381,21 @@ def load_credits(db):
 
     if credits:
         result = db.credits.insert_many(credits, ordered=False)
-        print(f"✓ Inserted {len(result.inserted_ids)} credit records")
+        print(f" Inserted {len(result.inserted_ids)} credit records")
     else:
-        print("✗ No credits to insert")
+        print(" No credits to insert")
 
 
 def load_people(db):
-    """Extract and load unique people from credits"""
     print("\n" + "="*60)
     print("Extracting people from credits...")
     print("="*60)
 
-    # Get all credits
     credits = list(db.credits.find())
 
     people_dict = {}
 
     for credit in tqdm(credits, desc="Processing credits for people"):
-        # Extract from cast
         if credit.get('cast'):
             for person in credit['cast']:
                 person_id = person.get('id')
@@ -448,7 +406,6 @@ def load_people(db):
                         'gender': person.get('gender')
                     }
 
-        # Extract from crew
         if credit.get('crew'):
             for person in credit['crew']:
                 person_id = person.get('id')
@@ -463,17 +420,12 @@ def load_people(db):
 
     if people:
         result = db.people.insert_many(people)
-        print(f"✓ Inserted {len(result.inserted_ids)} unique people")
+        print(f" Inserted {len(result.inserted_ids)} unique people")
     else:
-        print("✗ No people to insert")
+        print(" No people to insert")
 
 
 def load_ratings(db, sample_size=None):
-    """Load ratings from ratings_cleaned.csv
-
-    Args:
-        sample_size: If provided, only load a sample of ratings (for testing)
-    """
     print("\n" + "="*60)
     print("Loading ratings...")
     if sample_size:
@@ -502,21 +454,18 @@ def load_ratings(db, sample_size=None):
             if all([rating['userId'], rating['movieId'], rating['rating']]):
                 ratings.append(rating)
 
-        # Insert batch
         if ratings:
             db.ratings.insert_many(ratings)
             ratings = []
 
-    # Insert remaining
     if ratings:
         db.ratings.insert_many(ratings)
 
     total_count = db.ratings.count_documents({})
-    print(f"✓ Inserted {total_count} rating records")
+    print(f" Inserted {total_count} rating records")
 
 
 def load_all_data(db_connector):
-    """Load all data from CSV files into MongoDB"""
     print("\n" + "="*60)
     print("LOADING DATA INTO MONGODB")
     print("="*60)
@@ -524,11 +473,10 @@ def load_all_data(db_connector):
     db = db_connector.db
 
     try:
-        load_movies(db)  # Now includes tmdbId from links
+        load_movies(db)
         load_credits(db)
         load_people(db)
 
-        # Ask user about ratings (they can be huge)
         print("\n" + "="*60)
         print("Ratings file can be very large!")
         print("Options:")
@@ -544,7 +492,6 @@ def load_all_data(db_connector):
         else:
             print("Skipping ratings...")
 
-        # Print final statistics
         print("\n" + "="*60)
         print("FINAL STATISTICS")
         print("="*60)
@@ -554,11 +501,11 @@ def load_all_data(db_connector):
         print(f"Ratings:  {db.ratings.count_documents({})}")
         print("="*60)
 
-        print("\n✓ Data loading complete!")
+        print("\n Data loading complete!")
         return True
 
     except Exception as e:
-        print(f"\n✗ Error loading data: {e}")
+        print(f"\n Error loading data: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -573,10 +520,8 @@ if __name__ == '__main__':
     db_connector = None
 
     try:
-        # Create collections
         db_connector = create_collections()
 
-        # Ask if user wants to load data
         print("\n" + "="*60)
         print("Do you want to load data from CSV files?")
         load_data = input("Load data? (y/n): ").strip().lower()
@@ -587,17 +532,16 @@ if __name__ == '__main__':
             print("\nSkipping data loading. Run this script again to load data later.")
 
     except Exception as e:
-        print(f"\n✗ Setup failed: {e}")
+        print(f"\n Setup failed: {e}")
         import traceback
         traceback.print_exc()
         success = False
 
     finally:
-        # Close connection
         if db_connector:
             db_connector.close_connection()
 
         if success:
-            print("\n✓ Setup complete!")
+            print("\n Setup complete!")
         else:
-            print("\n✗ Setup failed. Please check the errors above.")
+            print("\n Setup failed. Please check the errors above.")

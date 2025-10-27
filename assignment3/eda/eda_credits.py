@@ -4,16 +4,13 @@ from pathlib import Path
 import pandas as pd
 from tabulate import tabulate
 
-# Set up paths
 data_dir = Path('../data/movies')
 
 def analyze_credits(df):
-    """Analyze credits.csv"""
     print("=== Credits Analysis ===")
     print(f"Number of rows: {len(df)}")
     print(f"Number of columns: {len(df.columns)}")
 
-    # Features and types in a table
     dtypes_table = [[col, str(dtype)] for col, dtype in df.dtypes.items()]
     print("\nFeatures and types:")
     print(tabulate(dtypes_table, headers=['Feature', 'Type'], tablefmt='grid'))
@@ -28,11 +25,9 @@ def analyze_credits(df):
     if missing.sum() == 0 and all((df[col] != 0).sum() == len(df) for col in df.columns if df[col].dtype in ['int64', 'float64']):
         print("  No missing or zero values found.")
 
-    # Specific analysis for credits.csv
     analyze_credits_specific(df)
 
 def analyze_credits_specific(df):
-    """Specific analysis for credits.csv"""
     print("\n=== Credits Specific Analysis ===")
     try:
         df['cast_parsed'] = df['cast'].apply(lambda x: ast.literal_eval(x) if pd.notnull(x) and x != '' else [])
@@ -53,7 +48,6 @@ def analyze_credits_specific(df):
         print(f"Error analyzing cast/crew: {e}")
 
 def main():
-    # Analyze credits.csv
     data_path = data_dir / 'credits.csv'
     if data_path.exists():
         df = pd.read_csv(data_path, low_memory=False)

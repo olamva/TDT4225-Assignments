@@ -3,20 +3,16 @@ from pathlib import Path
 import pandas as pd
 from tabulate import tabulate
 
-# Set up paths
 data_dir = Path('../data/movies')
 
 def analyze_links(df):
-    """Analyze links.csv"""
     print("=== Links Analysis ===")
     print(f"Number of rows: {len(df)}")
     print(f"Number of columns: {len(df.columns)}")
-    
-    # Count rows with any missing values
+
     rows_with_missing = df.isnull().any(axis=1).sum()
     print(f"\nRows with missing values: {rows_with_missing}")
 
-    # Attributes and types
     dtypes_table = [[col, str(dtype)] for col, dtype in df.dtypes.items()]
     print("\nAttributes and types:")
     print(tabulate(dtypes_table, headers=['Attribute', 'Type'], tablefmt='grid'))
@@ -31,14 +27,11 @@ def analyze_links(df):
     if missing.sum() == 0 and all((df[col] != 0).sum() == len(df) for col in df.columns if df[col].dtype in ['int64', 'float64']):
         print("  No missing or zero values found.")
 
-    # Specific analysis for links.csv
     analyze_links_specific(df)
 
 def analyze_links_specific(df):
-    """Specific analysis for links.csv"""
     print("\n=== Links Specific Analysis ===")
 
-    # Missing values
     missing = df.isnull().sum()
     total_missing = missing.sum()
     print(f"Rows with missing values: {total_missing}")
@@ -49,7 +42,6 @@ def analyze_links_specific(df):
             if missing[col] > 0:
                 print(f"  {col}: {missing[col]} ({missing[col]/len(df)*100:.2f}%)")
 
-    # Check for missing/null imdbId
     if 'imdbId' in df.columns:
         null_imdb = df['imdbId'].isnull().sum()
         empty_imdb = (df['imdbId'] == '').sum() if df['imdbId'].dtype == 'object' else 0
@@ -60,7 +52,6 @@ def analyze_links_specific(df):
             print(f"  Empty imdbId: {empty_imdb}")
 
 def main():
-    # Analyze links.csv
     data_path = data_dir / 'links.csv'
     if data_path.exists():
         df = pd.read_csv(data_path, low_memory=False)

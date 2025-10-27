@@ -1,15 +1,6 @@
-"""
-Query 5: Median runtime and movie count by decade and primary genre
-Sorted by decade then median runtime (desc)
-"""
-
-import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import json
-
+sys.path.append('..')
 from DbConnector import DbConnector
 
 
@@ -18,7 +9,6 @@ def run_query():
     db = db_connector.db
 
     pipeline = [
-        # Filter movies with release_date and runtime
         {'$match': {
             'release_date': {'$ne': None, '$exists': True},
             'runtime': {'$ne': None, '$gt': 0},
@@ -35,7 +25,6 @@ def run_query():
             'primary_genre': {'$arrayElemAt': ['$genres_list', 0]}
         }},
 
-        # Calculate decade
         {'$addFields': {
             'decade': {
                 '$concat': [
@@ -45,7 +34,6 @@ def run_query():
             }
         }},
 
-        # Group by decade and primary genre
         {'$group': {
             '_id': {
                 'decade': '$decade',
@@ -55,7 +43,6 @@ def run_query():
             'runtimes': {'$push': '$runtime'}
         }},
 
-        # Calculate median runtime
         {'$addFields': {
             'sorted_runtimes': {'$sortArray': {'input': '$runtimes', 'sortBy': 1}}
         }},
@@ -81,7 +68,6 @@ def run_query():
             }
         }},
 
-        # Sort by decade, then median runtime descending
         {'$sort': {'_id.decade': 1, 'median_runtime': -1}},
 
         # Format output
@@ -96,7 +82,6 @@ def run_query():
 
     results = list(db.movies.aggregate(pipeline))
 
-    # Print results
     print("\n" + "="*80)
     print("Query 5: Median Runtime and Movie Count by Decade and Primary Genre")
     print("="*80)
@@ -125,7 +110,3 @@ def run_query():
 
 if __name__ == '__main__':
     results = run_query()
-
-    # Optionally save to JSON
-    with open('queries/results/query5_results.json', 'w') as f:
-        json.dump(results, f, indent=2)

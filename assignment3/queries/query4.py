@@ -1,16 +1,6 @@
-"""
-Query 4: Top 10 film collections (≥3 movies) with largest total revenue
-Report movie count, total revenue, median vote_average, earliest→latest release date
-"""
-
-import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import json
-from datetime import datetime
-
+sys.path.append('..')
 from DbConnector import DbConnector
 
 
@@ -19,13 +9,11 @@ def run_query():
     db = db_connector.db
 
     pipeline = [
-        # Filter movies with collections
         {'$match': {
             'belongs_to_collection': {'$ne': None},
             'belongs_to_collection.name': {'$exists': True}
         }},
 
-        # Group by collection
         {'$group': {
             '_id': '$belongs_to_collection.name',
             'movie_count': {'$sum': 1},
@@ -34,10 +22,8 @@ def run_query():
             'release_dates': {'$push': '$release_date'}
         }},
 
-        # Filter collections with ≥3 movies
         {'$match': {'movie_count': {'$gte': 3}}},
 
-        # Calculate median vote_average
         {'$addFields': {
             'sorted_votes': {'$sortArray': {'input': '$vote_averages', 'sortBy': 1}},
             'sorted_dates': {'$sortArray': {'input': '$release_dates', 'sortBy': 1}}
@@ -66,10 +52,8 @@ def run_query():
             'latest_date': {'$arrayElemAt': ['$sorted_dates', -1]}
         }},
 
-        # Sort by total revenue descending
         {'$sort': {'total_revenue': -1}},
 
-        # Limit to top 10
         {'$limit': 10},
 
         # Format output
@@ -91,7 +75,6 @@ def run_query():
 
     results = list(db.movies.aggregate(pipeline))
 
-    # Print results
     print("\n" + "="*120)
     print("Query 4: Top 10 Film Collections (≥3 movies) with Largest Total Revenue")
     print("="*120)
@@ -113,7 +96,3 @@ def run_query():
 
 if __name__ == '__main__':
     results = run_query()
-
-    # Optionally save to JSON
-    with open('queries/results/query4_results.json', 'w') as f:
-        json.dump(results, f, indent=2)

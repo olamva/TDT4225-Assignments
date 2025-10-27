@@ -1,16 +1,6 @@
-"""
-Query 8: Top 20 director-actor pairs (≥3 collaborations) with highest mean vote_average
-Filter: vote_count ≥ 100
-Include films count and mean revenue
-"""
-
-import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import json
-
+sys.path.append('..')
 from DbConnector import DbConnector
 
 
@@ -19,7 +9,6 @@ def run_query():
     db = db_connector.db
 
     pipeline = [
-        # Lookup movie details
         {'$lookup': {
             'from': 'movies',
             'localField': 'id',
@@ -29,16 +18,13 @@ def run_query():
 
         {'$unwind': '$movie'},
 
-        # Filter movies with vote_count ≥ 100
         {'$match': {
             'movie.vote_count': {'$gte': 100}
         }},
 
-        # Get directors
         {'$unwind': '$crew'},
         {'$match': {'crew.job': 'Director'}},
 
-        # Store director info and unwind cast
         {'$addFields': {
             'director': '$crew'
         }},
@@ -58,13 +44,10 @@ def run_query():
             'avg_revenue': {'$avg': '$movie.revenue'}
         }},
 
-        # Filter pairs with ≥3 collaborations
         {'$match': {'collaboration_count': {'$gte': 3}}},
 
-        # Sort by mean vote_average descending
         {'$sort': {'avg_vote_average': -1}},
 
-        # Limit to top 20
         {'$limit': 20},
 
         # Format output
@@ -80,7 +63,6 @@ def run_query():
 
     results = list(db.credits.aggregate(pipeline))
 
-    # Print results
     print("\n" + "="*120)
     print("Query 8: Top 20 Director-Actor Pairs (≥3 Collaborations, vote_count ≥100)")
     print("="*120)
@@ -103,7 +85,3 @@ def run_query():
 
 if __name__ == '__main__':
     results = run_query()
-
-    # Optionally save to JSON
-    with open('queries/results/query8_results.json', 'w') as f:
-        json.dump(results, f, indent=2)

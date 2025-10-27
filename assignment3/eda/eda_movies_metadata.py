@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from tabulate import tabulate
 
-# Set up paths
 data_dir = Path('../data/movies')
 figures_dir = Path('../figures')
 figures_dir.mkdir(exist_ok=True)
@@ -15,7 +14,6 @@ def analyze_movies_metadata(df):
     """Analyze movies_metadata.csv"""
     print("=== Movies Metadata Analysis ===")
 
-    # Features and types in a table
     dtypes_table = [[col, str(dtype)] for col, dtype in df.dtypes.items()]
     print("Features and types:")
     print(tabulate(dtypes_table, headers=['Feature', 'Type'], tablefmt='grid'))
@@ -30,18 +28,14 @@ def analyze_movies_metadata(df):
     if missing.sum() == 0 and all((df[col] != 0).sum() == len(df) for col in df.columns if df[col].dtype in ['int64', 'float64']):
         print("  No missing or zero values found.")
 
-    # Specific analysis for movies_metadata.csv
     analyze_movies_metadata_specific(df)
 
 def analyze_movies_metadata_specific(df):
-    """Specific analysis for movies_metadata.csv"""
-    # Convert budget and revenue to numeric
     df['budget'] = pd.to_numeric(df['budget'], errors='coerce')
     df['revenue'] = pd.to_numeric(df['revenue'], errors='coerce')
 
     print("\n=== Movies Metadata Specific Analysis ===")
 
-    # Median and mean for budget and revenue
     print("Budget statistics:")
     print(f"  Mean: {df['budget'].mean():.2f}")
     print(f"  Median: {df['budget'].median():.2f}")
@@ -54,7 +48,6 @@ def analyze_movies_metadata_specific(df):
     print(f"  Max: {df['revenue'].max():.2f}")
     print(f"  Min: {df['revenue'].min():.2f}")
 
-    # Runtime statistics
     print("Runtime statistics:")
     print(f"  Mean: {df['runtime'].mean():.2f} minutes")
     print(f"  Median: {df['runtime'].median():.2f} minutes")
@@ -70,11 +63,9 @@ def analyze_movies_metadata_specific(df):
         for idx, row in zero_runtime_movies.iterrows():
             print(f"    {row['title']} ({row['release_date']}) - {row['genres']}")
 
-    # Average vote_average and vote_count
     print(f"Average vote_average: {df['vote_average'].mean():.2f}")
     print(f"Average vote_count: {df['vote_count'].mean():.2f}")
 
-    # Plot vote_average and vote_count
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
     ax1.hist(df['vote_average'].dropna(), bins=20, alpha=0.7)
@@ -91,7 +82,6 @@ def analyze_movies_metadata_specific(df):
     plt.savefig(figures_dir / 'vote_stats.png')
     plt.close()
 
-    # Histogram of release_date
     df['release_date'] = pd.to_datetime(df['release_date'], errors='coerce')
     plt.figure(figsize=(10, 6))
     df['release_date'].dt.year.dropna().hist(bins=50, alpha=0.7)
@@ -101,7 +91,6 @@ def analyze_movies_metadata_specific(df):
     plt.savefig(figures_dir / 'release_date_hist.png')
     plt.close()
 
-    # Histogram of runtime
     plt.figure(figsize=(10, 6))
     df['runtime'].dropna().hist(bins=50, alpha=0.7)
     plt.title('Distribution of Runtime')
@@ -110,7 +99,6 @@ def analyze_movies_metadata_specific(df):
     plt.savefig(figures_dir / 'runtime_hist.png')
     plt.close()
 
-    # Histogram of runtime capped at 99th percentile
     percentile_99 = df['runtime'].quantile(0.99)
     plt.figure(figsize=(10, 6))
     runtime_capped = df['runtime'].dropna()
@@ -122,7 +110,6 @@ def analyze_movies_metadata_specific(df):
     plt.savefig(figures_dir / 'runtime_hist_99percentile.png')
     plt.close()
 
-    # Parse genres
     def extract_genres(genre_str):
         try:
             genres = ast.literal_eval(genre_str)
@@ -133,61 +120,50 @@ def analyze_movies_metadata_specific(df):
     df['genres_list'] = df['genres'].apply(extract_genres)
     df['main_genre'] = df['genres_list'].apply(lambda x: x[0] if x else 'Unknown')
 
-    # Count movies without genres
     movies_without_genres = df['genres_list'].apply(lambda x: len(x) == 0).sum()
     print(f"Movies without genres: {movies_without_genres}")
 
-    # Genre analysis
     print("\n=== Genre Analysis ===")
-    
-    # Get all unique genres
+
     all_genres = []
     for genres_list in df['genres_list']:
         all_genres.extend(genres_list)
     unique_genres = sorted(set(all_genres))
-    
-    # Define valid genres (exclude production companies)
-    invalid_genres = {'Aniplex', 'BROSTA TV', 'Carousel Productions', 'GoHands', 
-                     'Mardock Scramble Production Committee', 'Odyssey Media', 
-                     'Pulser Productions', 'Rogue State', 'Sentai Filmworks', 
-                     'Telescene Film Group Productions', 'The Cartel', 
+
+    invalid_genres = {'Aniplex', 'BROSTA TV', 'Carousel Productions', 'GoHands',
+                     'Mardock Scramble Production Committee', 'Odyssey Media',
+                     'Pulser Productions', 'Rogue State', 'Sentai Filmworks',
+                     'Telescene Film Group Productions', 'The Cartel',
                      'Vision View Entertainment'}
     valid_genres = [g for g in unique_genres if g not in invalid_genres]
-    
+
     print(f"Number of different genres: {len(valid_genres)}")
     print(f"All genres: {', '.join(valid_genres)}")
     print(f"\nInvalid entries found (production companies): {len(invalid_genres)}")
     print(f"  {', '.join(sorted(invalid_genres))}")
-    
-    # Create a row for each genre (explode the genres_list)
+
     df_exploded = df.explode('genres_list')
     df_exploded = df_exploded[df_exploded['genres_list'].notna() & (df_exploded['genres_list'] != '')]
-    # Filter out invalid genres
     df_exploded = df_exploded[~df_exploded['genres_list'].isin(invalid_genres)]
-    
-    # Average and median runtime for each genre
+
     print("\n=== Average and Median Runtime for Each Genre (All 20 Genres) ===")
     genre_runtime_stats = df_exploded.groupby('genres_list')['runtime'].agg(['mean', 'median', 'count']).sort_values('mean', ascending=False)
     genre_runtime_stats.columns = ['Avg Runtime', 'Median Runtime', 'Movie Count']
     print(tabulate(genre_runtime_stats, headers='keys', tablefmt='grid', floatfmt='.2f'))
-    
-    # Genres ranked by average vote
+
     print("\n=== Genres Ranked by Average Vote (All 20 Genres) ===")
     genre_vote_stats = df_exploded.groupby('genres_list')['vote_average'].agg(['mean', 'median', 'count']).sort_values('mean', ascending=False)
     genre_vote_stats.columns = ['Avg Vote', 'Median Vote', 'Movie Count']
     print(tabulate(genre_vote_stats, headers='keys', tablefmt='grid', floatfmt='.2f'))
 
-    # Show unique status values
     unique_statuses = df['status'].dropna().unique()
     print(f"Unique status values ({len(unique_statuses)}): {list(unique_statuses)}")
 
-    # Distribution of movies by status
     status_counts = df['status'].value_counts()
     print("\nDistribution of movies by status:")
     for status, count in status_counts.items():
         print(f"  {status}: {count} movies ({count/len(df)*100:.2f}%)")
 
-    # Scatter plot genre vs runtime    # Scatter plot genre vs runtime
     plt.figure(figsize=(12, 8))
     genre_runtime = df.groupby('main_genre')['runtime'].mean().sort_values()
     plt.scatter(range(len(genre_runtime)), genre_runtime.values, alpha=0.7)
@@ -199,7 +175,6 @@ def analyze_movies_metadata_specific(df):
     plt.savefig(figures_dir / 'genre_runtime_scatter.png')
     plt.close()
 
-    # Scatter plot genre vs budget
     plt.figure(figsize=(12, 8))
     genre_budget = df.groupby('main_genre')['budget'].mean().sort_values()
     plt.scatter(range(len(genre_budget)), genre_budget.values, alpha=0.7)
@@ -211,7 +186,6 @@ def analyze_movies_metadata_specific(df):
     plt.savefig(figures_dir / 'genre_budget_scatter.png')
     plt.close()
 
-    # Scatter plot budget vs revenue
     plt.figure(figsize=(10, 6))
     valid_data = df.dropna(subset=['budget', 'revenue'])
     valid_data = valid_data[(valid_data['budget'] > 0) & (valid_data['revenue'] > 0)]
@@ -222,7 +196,6 @@ def analyze_movies_metadata_specific(df):
     plt.savefig(figures_dir / 'budget_revenue_scatter.png')
     plt.close()
 
-    # Scatter plot runtime vs popularity
     plt.figure(figsize=(10, 6))
     df['popularity'] = pd.to_numeric(df['popularity'], errors='coerce')
     valid_data = df.dropna(subset=['runtime', 'popularity'])
@@ -235,7 +208,6 @@ def analyze_movies_metadata_specific(df):
     plt.close()
     print("Runtime vs Popularity scatter plot saved to figures/runtime_popularity_scatter.png")
 
-    # Count unique values in JSON fields
     def extract_names(field_str, key='name'):
         try:
             items = ast.literal_eval(field_str)
@@ -248,7 +220,6 @@ def analyze_movies_metadata_specific(df):
         except:
             return []
 
-    # Production companies
     all_prod_companies = []
     for comp_str in df['production_companies'].dropna():
         all_prod_companies.extend(extract_names(comp_str))
@@ -260,19 +231,17 @@ def analyze_movies_metadata_specific(df):
     for company, count in top_companies:
         print(f"  {company}: {count}")
 
-    # Production countries
     all_prod_countries = []
     for country_str in df['production_countries'].dropna():
         all_prod_countries.extend(extract_names(country_str))
     unique_prod_countries = set(all_prod_countries)
     print(f"Number of unique production countries: {len(unique_prod_countries)}")
     country_counts = Counter(all_prod_countries)
-    top_countries = country_counts.most_common(10)  # Get top 10 for plotting
+    top_countries = country_counts.most_common(10)
     print("Top 3 production countries:")
     for country, count in top_countries[:3]:
         print(f"  {country}: {count}")
 
-    # Plot production countries
     countries, counts = zip(*top_countries)
     plt.figure(figsize=(12, 6))
     plt.bar(countries, counts, alpha=0.7)
@@ -284,7 +253,6 @@ def analyze_movies_metadata_specific(df):
     plt.savefig(figures_dir / 'production_countries_bar.png')
     plt.close()
 
-    # Spoken languages
     all_spoken_langs = []
     for lang_str in df['spoken_languages'].dropna():
         all_spoken_langs.extend(extract_names(lang_str))
@@ -298,7 +266,6 @@ def analyze_movies_metadata_specific(df):
     avg_movies_per_lang = len(all_spoken_langs) / len(unique_spoken_langs) if unique_spoken_langs else 0
     print(f"Average number of movies per spoken language: {avg_movies_per_lang:.2f}")
 
-    # Collections
     all_collections = []
     for coll_str in df['belongs_to_collection'].dropna():
         all_collections.extend(extract_names(coll_str))
@@ -313,7 +280,6 @@ def analyze_movies_metadata_specific(df):
     print(f"Average number of movies in a collection: {avg_movies_per_collection:.2f}")
 
 def main():
-    # Analyze movies_metadata.csv
     data_path = data_dir / 'movies_metadata.csv'
     if data_path.exists():
         df = pd.read_csv(data_path, low_memory=False)
