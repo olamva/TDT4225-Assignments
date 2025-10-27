@@ -70,6 +70,149 @@ def clean_movies_runtime(df):
     return cleaned_df
 
 
+def fix_vote_counts(df, ratings_df, links_df):
+    """
+    Fix all vote counts in movies_metadata by calculating actual counts from ratings data.
+    
+    Args:
+        df: DataFrame with movies_metadata (uses 'id' which is TMDb ID)
+        ratings_df: DataFrame with ratings data (uses 'movieId' from links)
+        links_df: DataFrame to map tmdbId (= movies.id) to movieId (= ratings.movieId)
+    
+    Returns:
+        df: DataFrame with corrected vote_count values
+    """
+    print("\n" + "="*70)
+    print("Calculating actual vote counts from ratings...")
+    print("="*70)
+    
+    # Count ratings by movieId
+    ratings_counts = ratings_df.groupby('movieId').size().to_dict()
+    print(f"Calculated vote counts for {len(ratings_counts)} unique movieIds")
+    
+    # Convert links DataFrame types
+    links_df_converted = links_df.copy()
+    links_df_converted['tmdbId'] = pd.to_numeric(links_df_converted['tmdbId'], errors='coerce')
+    links_df_converted['movieId'] = pd.to_numeric(links_df_converted['movieId'], errors='coerce')
+    links_df_converted = links_df_converted.dropna(subset=['tmdbId', 'movieId'])
+    links_df_converted['tmdbId'] = links_df_converted['tmdbId'].astype(int)
+    links_df_converted['movieId'] = links_df_converted['movieId'].astype(int)
+    print(f"Mapped vote counts for {len(links_df_converted)} unique tmdbIds")
+    
+    # Create mapping from tmdbId to vote count
+    vote_counts = {}
+    for _, link_row in links_df_converted.iterrows():
+        tmdb_id = link_row['tmdbId']
+        movie_id = link_row['movieId']
+        
+        if movie_id in ratings_counts:
+            # If multiple movieIds map to same tmdbId, sum the ratings
+            if tmdb_id in vote_counts:
+                vote_counts[tmdb_id] += ratings_counts[movie_id]
+            else:
+                vote_counts[tmdb_id] = ratings_counts[movie_id]
+    
+    print(f"Mapped vote counts for {len(vote_counts)} movies (tmdbId -> movieId -> ratings)")
+    
+    # Now fix vote_count in the dataframe
+    df['id_int'] = pd.to_numeric(df['id'], errors='coerce').astype('Int64')
+    
+    # Track statistics
+    correct_count = 0
+    incorrect_count = 0
+    missing_count = 0
+    not_in_ratings = 0
+    
+    df['vote_count'] = pd.to_numeric(df['vote_count'], errors='coerce')
+    
+    for idx, row in df.iterrows():
+        tmdb_id = row['id_int']
+        
+        if pd.isna(tmdb_id):
+            missing_count += 1
+            continue
+            
+        if tmdb_id in vote_counts:
+            actual_count = vote_counts[tmdb_id]
+            csv_count = row['vote_count']
+            
+            if pd.notna(csv_count) and int(csv_count) == actual_count:
+                correct_count += 1
+            else:
+                incorrect_count += 1
+                df.at[idx, 'vote_count'] = actual_count
+        else:
+            not_in_ratings += 1
+            # Movie not in ratings, keep original value or set to 0
+            if pd.isna(row['vote_count']):
+                df.at[idx, 'vote_count'] = 0
+    
+    df = df.drop(columns=['id_int'])
+    
+    print("\n" + "="*70)
+    print("SUMMARY STATISTICS - BEFORE FIXING")
+    print("="*70)
+    print(f"Total movies in metadata: {len(df)}")
+    print(f"Movies found in ratings: {len(df) - not_in_ratings}")
+    print(f"Movies NOT in ratings: {not_in_ratings}")
+    print()
+    print(f"Correct vote_count:     {correct_count} ({correct_count/len(df)*100:.1f}%)")
+    print(f"Incorrect vote_count:   {incorrect_count} ({incorrect_count/len(df)*100:.1f}%) - FIXED")
+    print(f"Missing vote_count:     {missing_count} ({missing_count/len(df)*100:.1f}%)")
+    print("="*70)
+    
+    # Now verify the fixed data
+    print("\n" + "="*70)
+    print("VERIFYING FIXED VOTE COUNTS...")
+    print("="*70)
+    
+    df['id_int'] = pd.to_numeric(df['id'], errors='coerce').astype('Int64')
+    
+    verified_correct = 0
+    verified_incorrect = 0
+    verified_missing = 0
+    verified_not_in_ratings = 0
+    
+    for idx, row in df.iterrows():
+        tmdb_id = row['id_int']
+        csv_count = row['vote_count']
+        
+        if pd.isna(tmdb_id):
+            verified_missing += 1
+            continue
+            
+        if tmdb_id in vote_counts:
+            actual_count = vote_counts[tmdb_id]
+            if pd.notna(csv_count) and int(csv_count) == actual_count:
+                verified_correct += 1
+            else:
+                verified_incorrect += 1
+        else:
+            verified_not_in_ratings += 1
+    
+    df = df.drop(columns=['id_int'])
+    
+    print("\n" + "="*70)
+    print("SUMMARY STATISTICS - AFTER FIXING")
+    print("="*70)
+    print(f"Total movies in metadata: {len(df)}")
+    print(f"Movies found in ratings: {len(df) - verified_not_in_ratings}")
+    print(f"Movies NOT in ratings: {verified_not_in_ratings}")
+    print()
+    print(f"[OK] Correct vote_count:     {verified_correct} ({verified_correct/len(df)*100:.1f}%)")
+    print(f"[X]  Incorrect vote_count:   {verified_incorrect} ({verified_incorrect/len(df)*100:.1f}%)")
+    print(f"[!]  Missing vote_count:     {verified_missing} ({verified_missing/len(df)*100:.1f}%)")
+    print("="*70)
+    
+    if verified_incorrect == 0 and verified_missing == 0:
+        print("SUCCESS! All vote counts have been fixed correctly!")
+    else:
+        print(f"WARNING: {verified_incorrect + verified_missing} vote counts still need attention")
+    print("="*70)
+    
+    return df
+
+
 def merge_duplicate_movies(df, ratings_df=None, links_df=None):
     """
     Merge duplicate movie entries by:
@@ -192,7 +335,7 @@ def merge_duplicate_movies(df, ratings_df=None, links_df=None):
     df_no_dupes = df[~df['id'].isin(duplicate_ids)].copy()
     merged_df = pd.concat([df_no_dupes, pd.DataFrame(merged_rows)], ignore_index=True)
 
-    print(f"\n✓ Merged {initial_count - len(merged_df)} duplicate entries")
+    print(f"\n[OK] Merged {initial_count - len(merged_df)} duplicate entries")
     print(f"Final movie count: {len(merged_df)}")
 
     return merged_df
@@ -309,7 +452,7 @@ def merge_duplicate_credits(df):
     df_no_dupes = df[~df['id'].isin(duplicate_ids)].copy()
     merged_df = pd.concat([df_no_dupes, pd.DataFrame(merged_rows)], ignore_index=True)
 
-    print(f"\n✓ Merged {initial_count - len(merged_df)} duplicate entries")
+    print(f"\n[OK] Merged {initial_count - len(merged_df)} duplicate entries")
     print(f"Final credits count: {len(merged_df)}")
 
     return merged_df
@@ -519,6 +662,11 @@ if __name__ == '__main__':
             if input_file == 'movies_metadata.csv':
                 # First clean runtime and filter released movies
                 cleaned_df = clean_movies_runtime(df)
+                # Fix all vote counts using actual ratings data
+                if ratings_df is not None and links_df is not None:
+                    cleaned_df = fix_vote_counts(cleaned_df, ratings_df, links_df)
+                else:
+                    print("WARNING: ratings or links data not available, skipping vote count correction")
                 # Then merge duplicates (pass ratings and links for accurate vote counts)
                 cleaned_df = merge_duplicate_movies(cleaned_df, ratings_df, links_df)
                 save_cleaned_movies(cleaned_df, output_file)
