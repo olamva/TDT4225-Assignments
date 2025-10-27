@@ -55,11 +55,14 @@ def clean_movies_runtime(df):
 
 def fix_vote_counts(df, ratings_df, links_df):
     print("\n" + "="*70)
-    print("Calculating actual vote counts from ratings...")
+    print("Calculating actual vote counts and averages from ratings...")
     print("="*70)
 
-    ratings_counts = ratings_df.groupby('movieId').size().to_dict()
-    print(f"Calculated vote counts for {len(ratings_counts)} unique movieIds")
+    # Calculate both count and average rating per movieId
+    ratings_stats = ratings_df.groupby('movieId')['rating'].agg(['count', 'mean']).to_dict()
+    ratings_counts = ratings_stats['count']
+    ratings_averages = ratings_stats['mean']
+    print(f"Calculated vote counts and averages for {len(ratings_counts)} unique movieIds")
 
     links_df_converted = links_df.copy()
     links_df_converted['tmdbId'] = pd.to_numeric(links_df_converted['tmdbId'], errors='coerce')
@@ -70,17 +73,29 @@ def fix_vote_counts(df, ratings_df, links_df):
     print(f"Mapped vote counts for {len(links_df_converted)} unique tmdbIds")
 
     vote_counts = {}
+    vote_averages = {}
     for _, link_row in links_df_converted.iterrows():
         tmdb_id = link_row['tmdbId']
         movie_id = link_row['movieId']
 
         if movie_id in ratings_counts:
             if tmdb_id in vote_counts:
-                vote_counts[tmdb_id] += ratings_counts[movie_id]
+                # For duplicates, we need to weighted average
+                old_count = vote_counts[tmdb_id]
+                old_avg = vote_averages[tmdb_id]
+                new_count = ratings_counts[movie_id]
+                new_avg = ratings_averages[movie_id]
+                
+                total_count = old_count + new_count
+                weighted_avg = (old_avg * old_count + new_avg * new_count) / total_count
+                
+                vote_counts[tmdb_id] = total_count
+                vote_averages[tmdb_id] = weighted_avg
             else:
                 vote_counts[tmdb_id] = ratings_counts[movie_id]
+                vote_averages[tmdb_id] = ratings_averages[movie_id]
 
-    print(f"Mapped vote counts for {len(vote_counts)} movies (tmdbId -> movieId -> ratings)")
+    print(f"Mapped vote counts and averages for {len(vote_counts)} movies (tmdbId -> movieId -> ratings)")
 
     df['id_int'] = pd.to_numeric(df['id'], errors='coerce').astype('Int64')
 
@@ -90,6 +105,7 @@ def fix_vote_counts(df, ratings_df, links_df):
     not_in_ratings = 0
 
     df['vote_count'] = pd.to_numeric(df['vote_count'], errors='coerce')
+    df['vote_average'] = pd.to_numeric(df['vote_average'], errors='coerce')
 
     for idx, row in df.iterrows():
         tmdb_id = row['id_int']
@@ -100,6 +116,7 @@ def fix_vote_counts(df, ratings_df, links_df):
 
         if tmdb_id in vote_counts:
             actual_count = vote_counts[tmdb_id]
+            actual_average = vote_averages[tmdb_id]
             csv_count = row['vote_count']
 
             if pd.notna(csv_count) and int(csv_count) == actual_count:
@@ -107,6 +124,7 @@ def fix_vote_counts(df, ratings_df, links_df):
             else:
                 incorrect_count += 1
                 df.at[idx, 'vote_count'] = actual_count
+                df.at[idx, 'vote_average'] = actual_average
         else:
             not_in_ratings += 1
             if pd.isna(row['vote_count']):
@@ -127,19 +145,22 @@ def fix_vote_counts(df, ratings_df, links_df):
     print("="*70)
 
     print("\n" + "="*70)
-    print("VERIFYING FIXED VOTE COUNTS...")
+    print("VERIFYING FIXED VOTE COUNTS AND AVERAGES...")
     print("="*70)
 
     df['id_int'] = pd.to_numeric(df['id'], errors='coerce').astype('Int64')
 
-    verified_correct = 0
-    verified_incorrect = 0
+    verified_correct_count = 0
+    verified_incorrect_count = 0
+    verified_correct_average = 0
+    verified_incorrect_average = 0
     verified_missing = 0
     verified_not_in_ratings = 0
 
     for idx, row in df.iterrows():
         tmdb_id = row['id_int']
         csv_count = row['vote_count']
+        csv_average = row['vote_average']
 
         if pd.isna(tmdb_id):
             verified_missing += 1
@@ -147,10 +168,19 @@ def fix_vote_counts(df, ratings_df, links_df):
 
         if tmdb_id in vote_counts:
             actual_count = vote_counts[tmdb_id]
+            actual_average = vote_averages[tmdb_id]
+            
+            # Check vote count
             if pd.notna(csv_count) and int(csv_count) == actual_count:
-                verified_correct += 1
+                verified_correct_count += 1
             else:
-                verified_incorrect += 1
+                verified_incorrect_count += 1
+                
+            # Check vote average (with tolerance for floating point comparison)
+            if pd.notna(csv_average) and abs(csv_average - actual_average) < 0.01:
+                verified_correct_average += 1
+            else:
+                verified_incorrect_average += 1
         else:
             verified_not_in_ratings += 1
 
@@ -163,15 +193,18 @@ def fix_vote_counts(df, ratings_df, links_df):
     print(f"Movies found in ratings: {len(df) - verified_not_in_ratings}")
     print(f"Movies NOT in ratings: {verified_not_in_ratings}")
     print()
-    print(f"[OK] Correct vote_count:     {verified_correct} ({verified_correct/len(df)*100:.1f}%)")
-    print(f"[X]  Incorrect vote_count:   {verified_incorrect} ({verified_incorrect/len(df)*100:.1f}%)")
+    print(f"[OK] Correct vote_count:     {verified_correct_count} ({verified_correct_count/len(df)*100:.1f}%)")
+    print(f"[X]  Incorrect vote_count:   {verified_incorrect_count} ({verified_incorrect_count/len(df)*100:.1f}%)")
+    print(f"[OK] Correct vote_average:   {verified_correct_average} ({verified_correct_average/len(df)*100:.1f}%)")
+    print(f"[X]  Incorrect vote_average: {verified_incorrect_average} ({verified_incorrect_average/len(df)*100:.1f}%)")
     print(f"[!]  Missing vote_count:     {verified_missing} ({verified_missing/len(df)*100:.1f}%)")
     print("="*70)
 
-    if verified_incorrect == 0 and verified_missing == 0:
-        print("SUCCESS! All vote counts have been fixed correctly!")
+    if verified_incorrect_count == 0 and verified_incorrect_average == 0 and verified_missing == 0:
+        print("SUCCESS! All vote counts and averages have been fixed correctly!")
     else:
-        print(f"WARNING: {verified_incorrect + verified_missing} vote counts still need attention")
+        issues = verified_incorrect_count + verified_incorrect_average + verified_missing
+        print(f"WARNING: {issues} vote counts/averages still need attention")
     print("="*70)
 
     return df
