@@ -1,10 +1,9 @@
 """
 Setup MongoDB database and collections for Assignment 3
 This script creates the 'assignment3' database and the following collections:
-- movies: Contains movie metadata
+- movies: Contains movie metadata (includes tmdbId from links)
 - people: Contains person information (extracted from cast/crew)
 - credits: Contains cast and crew information for movies
-- links: Contains movie ID mappings
 - ratings: Contains user ratings for movies
 """
 
@@ -29,7 +28,7 @@ def create_collections():
 
     # Drop existing collections if they exist (for clean setup)
     existing_collections = db.list_collection_names()
-    for collection in ['movies', 'people', 'credits', 'links', 'ratings']:
+    for collection in ['movies', 'people', 'credits', 'ratings']:
         if collection in existing_collections:
             db[collection].drop()
             print(f"Dropped existing collection: {collection}")
@@ -72,7 +71,8 @@ def create_collections():
                 'title': {'bsonType': 'string'},
                 'video': {'bsonType': ['bool', 'string']},
                 'vote_average': {'bsonType': ['double', 'string']},
-                'vote_count': {'bsonType': ['int', 'long', 'double', 'string']}
+                'vote_count': {'bsonType': ['int', 'long', 'double', 'string']},
+                'tmdbId': {'bsonType': ['int', 'long', 'double', 'string', 'null'], 'description': 'TMDb ID from links'}
             }
         }
     }
@@ -82,10 +82,11 @@ def create_collections():
     db.movies.create_index([('title', ASCENDING)])
     db.movies.create_index([('release_date', DESCENDING)])
     db.movies.create_index([('vote_average', DESCENDING)])
-    print("✓ Created 'movies' collection with indexes on: id (unique), title, release_date, vote_average")
+    db.movies.create_index([('tmdbId', ASCENDING)])
+    print("✓ Created 'movies' collection with indexes on: id (unique), title, release_date, vote_average, tmdbId")
 
     # 2. People Collection
-    # Extracted from cast and crew data
+    # Extracted from cast and crew data (profile_path removed)
     people_validator = {
         '$jsonSchema': {
             'bsonType': 'object',
@@ -99,8 +100,7 @@ def create_collections():
                     'bsonType': 'string',
                     'description': 'Person name'
                 },
-                'gender': {'bsonType': ['int', 'null']},
-                'profile_path': {'bsonType': ['string', 'null']}
+                'gender': {'bsonType': ['int', 'null']}
             }
         }
     }
@@ -164,36 +164,7 @@ def create_collections():
     db.credits.create_index([('crew.id', ASCENDING)])
     print("✓ Created 'credits' collection with indexes on: id (unique), cast.id, crew.id")
 
-    # 4. Links Collection
-    # Based on links_cleaned.csv columns
-    links_validator = {
-        '$jsonSchema': {
-            'bsonType': 'object',
-            'required': ['movieId'],
-            'properties': {
-                'movieId': {
-                    'bsonType': ['int', 'long'],
-                    'description': 'Movie ID (primary key)'
-                },
-                'imdbId': {
-                    'bsonType': ['string', 'null'],
-                    'description': 'IMDb ID'
-                },
-                'tmdbId': {
-                    'bsonType': ['int', 'long', 'double', 'string', 'null'],
-                    'description': 'TMDb ID'
-                }
-            }
-        }
-    }
-
-    db.create_collection('links', validator=links_validator)
-    db.links.create_index([('movieId', ASCENDING)], unique=True)
-    db.links.create_index([('imdbId', ASCENDING)])
-    db.links.create_index([('tmdbId', ASCENDING)])
-    print("✓ Created 'links' collection with indexes on: movieId (unique), imdbId, tmdbId")
-
-    # 5. Ratings Collection
+    # 4. Ratings Collection
     # Based on ratings_cleaned.csv columns
     ratings_validator = {
         '$jsonSchema': {
@@ -236,7 +207,7 @@ def create_collections():
     # Print collection stats
     print("Collection Statistics:")
     print("-" * 50)
-    for collection_name in ['movies', 'people', 'credits', 'links', 'ratings']:
+    for collection_name in ['movies', 'people', 'credits', 'ratings']:
         collection = db[collection_name]
         count = collection.count_documents({})
         indexes = collection.index_information()
@@ -247,8 +218,6 @@ def create_collections():
             print(f"    - {idx_name}: {idx_info.get('key', [])}")
 
     print("\n✓ Collections created successfully!")
-    return db_connector
-
     return db_connector
 
 
@@ -265,12 +234,28 @@ def safe_eval(val):
 
 
 def load_movies(db):
-    """Load movies from movies_metadata_cleaned.csv"""
+    """Load movies from movies_metadata_cleaned.csv and merge tmdbId from links"""
     print("\n" + "="*60)
     print("Loading movies...")
     print("="*60)
 
+    # Load movies
     df = pd.read_csv('data/movies_cleaned/movies_metadata_cleaned.csv', low_memory=False)
+
+    # Load links to get tmdbId
+    print("Loading links data to merge tmdbId...")
+    links_df = pd.read_csv('data/movies_cleaned/links_cleaned.csv')
+
+    # Create a mapping from movie id to tmdbId
+    # Note: links has 'movieId' column, movies has 'id' column
+    tmdb_mapping = {}
+    for _, row in links_df.iterrows():
+        movie_id = int(row['movieId']) if pd.notna(row['movieId']) else None
+        tmdb_id = int(row['tmdbId']) if pd.notna(row['tmdbId']) and row['tmdbId'] != '' else None
+        if movie_id and tmdb_id:
+            tmdb_mapping[movie_id] = tmdb_id
+
+    print(f"Loaded {len(tmdb_mapping)} tmdbId mappings from links")
 
     # Find and report duplicates based on 'id' column
     initial_count = len(df)
@@ -305,10 +290,9 @@ def load_movies(db):
 
                     if differences:
                         print(f"        Occurrence 1 vs {i+1}: {', '.join(differences)}")
-                        # Show specific important field differences
-                        for field in ['title', 'release_date', 'revenue', 'budget', 'vote_count']:
-                            if field in differences:
-                                print(f"          • {field}: '{first_row[field]}' vs '{current_row[field]}'")
+                        # Show specific field differences for all different fields
+                        for field in differences:
+                            print(f"          • {field}: '{first_row[field]}' vs '{current_row[field]}'")
                     else:
                         print(f"        Occurrence 1 vs {i+1}: Identical")
 
@@ -355,7 +339,8 @@ def load_movies(db):
             'title': row['title'] if pd.notna(row['title']) else '',
             'video': row['video'] if pd.notna(row['video']) else None,
             'vote_average': float(row['vote_average']) if pd.notna(row['vote_average']) else 0.0,
-            'vote_count': int(row['vote_count']) if pd.notna(row['vote_count']) else 0
+            'vote_count': int(row['vote_count']) if pd.notna(row['vote_count']) else 0,
+            'tmdbId': tmdb_mapping.get(movie_id)  # Add tmdbId from links
         }
 
         movies.append(movie)
@@ -460,8 +445,7 @@ def load_people(db):
                     people_dict[person_id] = {
                         'id': person_id,
                         'name': person.get('name'),
-                        'gender': person.get('gender'),
-                        'profile_path': person.get('profile_path')
+                        'gender': person.get('gender')
                     }
 
         # Extract from crew
@@ -472,8 +456,7 @@ def load_people(db):
                     people_dict[person_id] = {
                         'id': person_id,
                         'name': person.get('name'),
-                        'gender': person.get('gender'),
-                        'profile_path': person.get('profile_path')
+                        'gender': person.get('gender')
                     }
 
     people = list(people_dict.values())
@@ -483,32 +466,6 @@ def load_people(db):
         print(f"✓ Inserted {len(result.inserted_ids)} unique people")
     else:
         print("✗ No people to insert")
-
-
-def load_links(db):
-    """Load links from links_cleaned.csv"""
-    print("\n" + "="*60)
-    print("Loading links...")
-    print("="*60)
-
-    df = pd.read_csv('data/movies_cleaned/links_cleaned.csv')
-
-    links = []
-    for _, row in tqdm(df.iterrows(), total=len(df), desc="Processing links"):
-        link = {
-            'movieId': int(row['movieId']) if pd.notna(row['movieId']) else None,
-            'imdbId': str(row['imdbId']) if pd.notna(row['imdbId']) else None,
-            'tmdbId': int(row['tmdbId']) if pd.notna(row['tmdbId']) and row['tmdbId'] != '' else None
-        }
-
-        if link['movieId'] is not None:
-            links.append(link)
-
-    if links:
-        result = db.links.insert_many(links)
-        print(f"✓ Inserted {len(result.inserted_ids)} link records")
-    else:
-        print("✗ No links to insert")
 
 
 def load_ratings(db, sample_size=None):
@@ -567,10 +524,9 @@ def load_all_data(db_connector):
     db = db_connector.db
 
     try:
-        load_movies(db)
+        load_movies(db)  # Now includes tmdbId from links
         load_credits(db)
         load_people(db)
-        load_links(db)
 
         # Ask user about ratings (they can be huge)
         print("\n" + "="*60)
@@ -595,7 +551,6 @@ def load_all_data(db_connector):
         print(f"Movies:   {db.movies.count_documents({})}")
         print(f"Credits:  {db.credits.count_documents({})}")
         print(f"People:   {db.people.count_documents({})}")
-        print(f"Links:    {db.links.count_documents({})}")
         print(f"Ratings:  {db.ratings.count_documents({})}")
         print("="*60)
 
