@@ -71,7 +71,7 @@ def run_query():
             'avg_female_proportion': {'$avg': '$female_proportion'}
         }},
 
-        {'$sort': {'avg_female_proportion': -1}},
+        {'$sort': {'_id': 1}},
 
         # Format output
         {'$project': {
