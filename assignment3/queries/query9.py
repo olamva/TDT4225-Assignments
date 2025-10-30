@@ -20,6 +20,7 @@ def run_query():
         {'$group': {
             '_id': '$original_language',
             'count': {'$sum': 1},
+            'example_title': {'$first': '$title'},
         }},
 
         {'$sort': {'count': -1}},
@@ -31,6 +32,7 @@ def run_query():
             '_id': 0,
             'language': '$_id',
             'count': 1,
+            'example_title': 1,
         }}
     ]
 
@@ -44,7 +46,9 @@ def run_query():
         print(f"\n{'Rank':<5} {'Language':<15} {'Count':<10} {'Example Title':<60}")
         print("-"*100)
         for i, result in enumerate(results, 1):
-            print(f"{i:<5} {result['language']:<15} {result['count']:<10} {result['example_title'][:58]:<60}")
+            # example_title may be missing for some documents; guard against KeyError
+            example = result.get('example_title') or ''
+            print(f"{i:<5} {result['language']:<15} {result['count']:<10} {example[:58]:<60}")
     else:
         print("No results found.")
 
