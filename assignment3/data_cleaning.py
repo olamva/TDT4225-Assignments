@@ -509,7 +509,7 @@ def save_cleaned_movies(df, output_path='data/movies_cleaned/movies_metadata_cle
 
     cleaned_out = df.copy()
     if 'popularity' in cleaned_out.columns:
-        cleaned_out = cleaned_out.drop(columns=['popularity'])
+        cleaned_out = cleaned_out.drop(columns=['homepage', 'original_title', 'overview', 'popularity', 'poster_path', 'status', 'tagline', 'video'])
 
     cleaned_out.to_csv(output_file, index=False)
     print(f"Cleaned data saved to {output_file}")
