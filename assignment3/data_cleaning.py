@@ -85,10 +85,10 @@ def fix_vote_counts(df, ratings_df, links_df):
                 old_avg = vote_averages[tmdb_id]
                 new_count = ratings_counts[movie_id]
                 new_avg = ratings_averages[movie_id]
-                
+
                 total_count = old_count + new_count
                 weighted_avg = (old_avg * old_count + new_avg * new_count) / total_count
-                
+
                 vote_counts[tmdb_id] = total_count
                 vote_averages[tmdb_id] = weighted_avg
             else:
@@ -169,13 +169,13 @@ def fix_vote_counts(df, ratings_df, links_df):
         if tmdb_id in vote_counts:
             actual_count = vote_counts[tmdb_id]
             actual_average = vote_averages[tmdb_id]
-            
+
             # Check vote count
             if pd.notna(csv_count) and int(csv_count) == actual_count:
                 verified_correct_count += 1
             else:
                 verified_incorrect_count += 1
-                
+
             # Check vote average (with tolerance for floating point comparison)
             if pd.notna(csv_average) and abs(csv_average - actual_average) < 0.01:
                 verified_correct_average += 1
@@ -445,14 +445,28 @@ def clean_keywords(df):
 def clean_links(df):
     print(f"Original links rows: {len(df)}")
 
-    initial_count = len(df)
-    duplicate_mask = df.duplicated(subset=['movieId'], keep='first')
+    # Work on a copy
+    cleaned_df = df.copy()
+
+    # Normalize tmdbId to numeric and remove rows with missing/invalid tmdbId
+    cleaned_df['tmdbId_numeric'] = pd.to_numeric(cleaned_df['tmdbId'], errors='coerce')
+    missing_tmdb_mask = cleaned_df['tmdbId_numeric'].isna()
+    if missing_tmdb_mask.sum() > 0:
+        print(f"Removing {missing_tmdb_mask.sum()} rows with missing/invalid tmdbId")
+        cleaned_df = cleaned_df[~missing_tmdb_mask].copy()
+
+    # Convert tmdbId to integer type for consistency
+    cleaned_df['tmdbId'] = cleaned_df['tmdbId_numeric'].astype(int)
+    cleaned_df = cleaned_df.drop(columns=['tmdbId_numeric'])
+
+    # Remove duplicate movieId entries, keeping the first occurrence
+    initial_count = len(cleaned_df)
+    duplicate_mask = cleaned_df.duplicated(subset=['movieId'], keep='first')
     if duplicate_mask.sum() > 0:
-        print(f"Found {duplicate_mask.sum()} duplicate link entries")
-        cleaned_df = df[~duplicate_mask].copy()
+        print(f"Found {duplicate_mask.sum()} duplicate link entries (by movieId)")
+        cleaned_df = cleaned_df[~duplicate_mask].copy()
         print(f"Removed {initial_count - len(cleaned_df)} duplicate entries")
     else:
-        cleaned_df = df.copy()
         print("No duplicates found")
 
     print(f"Final links rows: {len(cleaned_df)}")
@@ -492,7 +506,12 @@ def save_cleaned_keywords(df, output_path='data/movies_cleaned/keywords_cleaned.
 def save_cleaned_movies(df, output_path='data/movies_cleaned/movies_metadata_cleaned.csv'):
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_file, index=False)
+
+    cleaned_out = df.copy()
+    if 'popularity' in cleaned_out.columns:
+        cleaned_out = cleaned_out.drop(columns=['popularity'])
+
+    cleaned_out.to_csv(output_file, index=False)
     print(f"Cleaned data saved to {output_file}")
 
 if __name__ == '__main__':
