@@ -66,20 +66,24 @@ def analyze_movies_metadata_specific(df):
     print(f"Average vote_average: {df['vote_average'].mean():.2f}")
     print(f"Average vote_count: {df['vote_count'].mean():.2f}")
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-
-    ax1.hist(df['vote_average'].dropna(), bins=20, alpha=0.7)
-    ax1.set_title('Distribution of Vote Average')
-    ax1.set_xlabel('Vote Average')
-    ax1.set_ylabel('Frequency')
-
-    ax2.hist(df['vote_count'].dropna(), bins=20, alpha=0.7)
-    ax2.set_title('Distribution of Vote Count')
-    ax2.set_xlabel('Vote Count')
-    ax2.set_ylabel('Frequency')
-
+    # Vote Average Distribution
+    plt.figure(figsize=(10, 6))
+    plt.hist(df['vote_average'].dropna(), bins=20, alpha=0.7)
+    plt.title('Distribution of Vote Average')
+    plt.xlabel('Vote Average')
+    plt.ylabel('Frequency')
     plt.tight_layout()
-    plt.savefig(figures_dir / 'vote_stats.png')
+    plt.savefig(figures_dir / 'vote_average_distribution.png')
+    plt.close()
+
+    # Vote Count Distribution
+    plt.figure(figsize=(10, 6))
+    plt.hist(df['vote_count'].dropna(), bins=20, alpha=0.7)
+    plt.title('Distribution of Vote Count')
+    plt.xlabel('Vote Count')
+    plt.ylabel('Frequency')
+    plt.tight_layout()
+    plt.savefig(figures_dir / 'vote_count_distribution.png')
     plt.close()
 
     df['release_date'] = pd.to_datetime(df['release_date'], errors='coerce')
