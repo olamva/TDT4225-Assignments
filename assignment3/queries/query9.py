@@ -20,7 +20,6 @@ def run_query():
         {'$group': {
             '_id': '$original_language',
             'count': {'$sum': 1},
-            'example_title': {'$first': '$title'}
         }},
 
         {'$sort': {'count': -1}},
@@ -32,7 +31,6 @@ def run_query():
             '_id': 0,
             'language': '$_id',
             'count': 1,
-            'example_title': 1
         }}
     ]
 

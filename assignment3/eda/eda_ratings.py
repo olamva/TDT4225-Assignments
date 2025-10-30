@@ -43,12 +43,51 @@ def analyze_ratings_specific(df):
         total_missing = missing.sum()
         print(f"Rows with missing values: {total_missing}")
 
-        invalid_user_ids = df['userId'].isnull().sum() + (df['userId'] == 0).sum()
-        invalid_movie_ids = df['movieId'].isnull().sum() + (df['movieId'] == 0).sum()
+        # Count invalid/zero IDs if columns exist
+        if 'userId' in df.columns:
+            invalid_user_ids = df['userId'].isnull().sum() + (df['userId'] == 0).sum()
+        else:
+            invalid_user_ids = 0
+
+        if 'movieId' in df.columns:
+            invalid_movie_ids = df['movieId'].isnull().sum() + (df['movieId'] == 0).sum()
+        else:
+            invalid_movie_ids = 0
+
         total_invalid_ids = invalid_user_ids + invalid_movie_ids
         print(f"Rows with invalid userId: {invalid_user_ids}")
         print(f"Rows with invalid movieId: {invalid_movie_ids}")
         print(f"Total rows with invalid IDs: {total_invalid_ids}")
+
+        # New: number of unique users (if present)
+        if 'userId' in df.columns:
+            unique_users = df['userId'].nunique(dropna=True)
+            print(f"Number of unique users: {unique_users}")
+
+        # New: rating statistics (min, max, median, mean) if rating column exists
+        # Accept common column names: 'rating'
+        rating_col = None
+        for candidate in ('rating', 'Rating'):
+            if candidate in df.columns:
+                rating_col = candidate
+                break
+
+        if rating_col:
+            ratings = pd.to_numeric(df[rating_col], errors='coerce').dropna()
+            if len(ratings) > 0:
+                r_min = ratings.min()
+                r_max = ratings.max()
+                r_median = ratings.median()
+                r_mean = ratings.mean()
+                print("\nRating statistics:")
+                print(f"  min: {r_min:.3f}")
+                print(f"  max: {r_max:.3f}")
+                print(f"  median: {r_median:.3f}")
+                print(f"  mean: {r_mean:.3f}")
+            else:
+                print("No valid rating values found (all missing or non-numeric).")
+        else:
+            print("No rating column found to compute statistics.")
 
     except Exception as e:
         print(f"Error analyzing ratings: {e}")
