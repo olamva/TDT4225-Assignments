@@ -9,24 +9,8 @@ def run_query():
     db = db_connector.db
     pipeline = [
         {'$match': {
-            '$or': [
-                {'overview': {'$regex': 'noir', '$options': 'i'}},
-                {'tagline': {'$regex': 'noir', '$options': 'i'}}
-            ],
+            'keywords': {'$elemMatch': {'$regex': 'noir', '$options': 'i'}},
             'vote_count': {'$gte': 50}
-        }},
-
-        {'$addFields': {
-            'year': {
-                '$cond': {
-                    'if': {'$and': [
-                        {'$ne': ['$release_date', None]},
-                        {'$gte': [{'$strLenCP': '$release_date'}, 4]}
-                    ]},
-                    'then': {'$substr': ['$release_date', 0, 4]},
-                    'else': 'N/A'
-                }
-            }
         }},
 
         {'$sort': {'vote_average': -1}},
@@ -37,25 +21,22 @@ def run_query():
         {'$project': {
             '_id': 0,
             'title': 1,
-            'year': 1,
             'vote_average': {'$round': ['$vote_average', 2]},
-            'vote_count': 1,
-            'overview': 1
         }}
     ]
 
     results = list(db.movies.aggregate(pipeline))
 
     print("\n" + "="*100)
-    print("Query 7: Top 20 'Noir' Movies (vote_count ≥ 50) by Vote Average")
+    print("Query 7: Top 20 'Noir' Movies (vote_count ≥ 50) by Vote Average — matched on keywords")
     print("="*100)
 
     if results:
-        print(f"\n{'Rank':<5} {'Title':<50} {'Year':<6} {'Vote Avg':<10} {'Vote Count':<12}")
+        print(f"\n{'Rank':<5} {'Title':<50} {'Vote Avg':<10}")
         print("-"*100)
         for i, result in enumerate(results, 1):
-            print(f"{i:<5} {result['title'][:48]:<50} {result['year']:<6} "
-                  f"{result['vote_average']:<10.2f} {result['vote_count']:<12}")
+            print(f"{i:<5} {result['title'][:48]:<50}"
+                  f"{result['vote_average']:<10.2f}")
     else:
         print("No results found.")
 

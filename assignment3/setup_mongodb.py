@@ -1,14 +1,4 @@
-"""
-Setup MongoDB database and collections for Assignment 3
-This script creates the 'assignment3' database and the following collections:
-- movies: Contains movie metadata (includes tmdbId from links)
-- people: Contains person information (extracted from cast/crew)
-- credits: Contains cast and crew information for movies
-- ratings: Contains user ratings for movies
-"""
-
 import ast
-import json
 
 import pandas as pd
 from DbConnector import DbConnector
@@ -65,6 +55,7 @@ def create_collections():
                 'video': {'bsonType': ['bool', 'string']},
                 'vote_average': {'bsonType': ['double', 'string']},
                 'vote_count': {'bsonType': ['int', 'long', 'double', 'string']},
+                'keywords': {'bsonType': ['array', 'string', 'null']},
                 'tmdbId': {'bsonType': ['int', 'long', 'double', 'string', 'null'], 'description': 'TMDb ID from links'}
             }
         }
@@ -232,6 +223,62 @@ def load_movies(db):
 
     print(f"Loaded {len(tmdb_mapping)} tmdbId mappings from links")
 
+    print("Loading keywords data to merge keywords (using links mapping for ID alignment)...")
+
+    try:
+        keywords_df = pd.read_csv('data/movies/keywords.csv')
+        print(f"Loaded keywords file: data/movies/keywords.csv ({len(keywords_df)} rows)")
+    except Exception as e:
+        print(f"Could not load keywords file 'data/movies/keywords.csv': {e}")
+        keywords_df = pd.DataFrame()
+
+    tmdb_to_movieid = {v: k for k, v in tmdb_mapping.items()}
+
+    keywords_by_tmdb = {}
+    keywords_by_movieid = {}
+
+    if not keywords_df.empty:
+        for _, krow in keywords_df.iterrows():
+            try:
+                kid_raw = krow.get('id')
+                if pd.isna(kid_raw) or kid_raw == '':
+                    continue
+                kid = int(kid_raw)
+            except Exception:
+                continue
+
+            raw_kw = krow.get('keywords') if 'keywords' in keywords_df.columns else None
+            raw_kw_parsed = safe_eval(raw_kw) if pd.notna(raw_kw) else None
+
+            names = []
+            if isinstance(raw_kw_parsed, list):
+                for it in raw_kw_parsed:
+                    if isinstance(it, dict):
+                        name = it.get('name')
+                        if name:
+                            names.append(name)
+                    elif isinstance(it, str):
+                        names.append(it)
+            elif isinstance(raw_kw_parsed, dict):
+                name = raw_kw_parsed.get('name') if raw_kw_parsed else None
+                if name:
+                    names.append(name)
+            elif isinstance(raw_kw_parsed, str):
+                names.append(raw_kw_parsed)
+
+            if kid in tmdb_to_movieid:
+                keywords_by_tmdb[kid] = names
+                keywords_by_movieid[tmdb_to_movieid[kid]] = names
+            elif kid in tmdb_mapping:
+                tmdb = tmdb_mapping.get(kid)
+                if tmdb:
+                    keywords_by_movieid[kid] = names
+                    keywords_by_tmdb[tmdb] = names
+            else:
+                keywords_by_tmdb[kid] = names
+
+    print(f"Prepared keywords_by_tmdb entries: {len(keywords_by_tmdb)}; keywords_by_movieid entries: {len(keywords_by_movieid)}")
+
     initial_count = len(df)
     duplicate_ids = df[df.duplicated(subset=['id'], keep='first')]['id'].tolist()
 
@@ -282,31 +329,23 @@ def load_movies(db):
 
         movie = {
             'id': movie_id,
-            'adult': row['adult'] if pd.notna(row['adult']) else None,
             'belongs_to_collection': safe_eval(row['belongs_to_collection']),
             'budget': int(row['budget']) if pd.notna(row['budget']) and row['budget'] != '' else 0,
             'genres': safe_eval(row['genres']),
             'genres_list': safe_eval(row['genres_list']),
-            'homepage': row['homepage'] if pd.notna(row['homepage']) else None,
             'imdb_id': row['imdb_id'] if pd.notna(row['imdb_id']) else None,
             'original_language': row['original_language'] if pd.notna(row['original_language']) else None,
-            'original_title': row['original_title'] if pd.notna(row['original_title']) else None,
-            'overview': row['overview'] if pd.notna(row['overview']) else None,
-            'popularity': float(row['popularity']) if pd.notna(row['popularity']) else 0.0,
-            'poster_path': row['poster_path'] if pd.notna(row['poster_path']) else None,
             'production_companies': safe_eval(row['production_companies']),
             'production_countries': safe_eval(row['production_countries']),
             'release_date': row['release_date'] if pd.notna(row['release_date']) else None,
             'revenue': int(row['revenue']) if pd.notna(row['revenue']) and row['revenue'] != '' else 0,
             'runtime': float(row['runtime']) if pd.notna(row['runtime']) and row['runtime'] != '' else None,
             'spoken_languages': safe_eval(row['spoken_languages']),
-            'status': row['status'] if pd.notna(row['status']) else None,
-            'tagline': row['tagline'] if pd.notna(row['tagline']) else None,
             'title': row['title'] if pd.notna(row['title']) else '',
-            'video': row['video'] if pd.notna(row['video']) else None,
             'vote_average': float(row['vote_average']) if pd.notna(row['vote_average']) else 0.0,
             'vote_count': int(row['vote_count']) if pd.notna(row['vote_count']) else 0,
-            'tmdbId': tmdb_mapping.get(movie_id)  # Add tmdbId from links
+            # Prefer keywords_by_tmdb lookup since movies metadata 'id' is TMDb ID
+            'keywords': keywords_by_tmdb.get(movie_id, []),
         }
 
         movies.append(movie)
@@ -544,4 +583,5 @@ if __name__ == '__main__':
         if success:
             print("\n Setup complete!")
         else:
+            print("\n Setup failed. Please check the errors above.")
             print("\n Setup failed. Please check the errors above.")
