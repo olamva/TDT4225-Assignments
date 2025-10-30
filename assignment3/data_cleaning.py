@@ -557,6 +557,45 @@ def save_cleaned_movies(df, output_path='data/movies_cleaned/movies_metadata_cle
     cleaned_out.to_csv(output_file, index=False)
     print(f"Cleaned data saved to {output_file}")
 
+
+def print_vote_and_revenue_stats(df):
+    stats_df = df.copy()
+    for col in ['vote_average', 'vote_count', 'revenue']:
+        if col in stats_df.columns:
+            stats_df[col] = pd.to_numeric(stats_df[col], errors='coerce')
+
+    vote_avg_mean = stats_df['vote_average'].mean() if 'vote_average' in stats_df.columns else None
+    vote_count_mean = stats_df['vote_count'].mean() if 'vote_count' in stats_df.columns else None
+
+    rev_series = stats_df['revenue'].dropna() if 'revenue' in stats_df.columns else pd.Series(dtype=float)
+    rev_mean = rev_series.mean() if not rev_series.empty else None
+    rev_median = rev_series.median() if not rev_series.empty else None
+    rev_max = rev_series.max() if not rev_series.empty else None
+    rev_min = rev_series.min() if not rev_series.empty else None
+
+    print('\n' + '='*70)
+    print('STATISTICS: Vote variables and Revenue (after cleaning)')
+    print('='*70)
+    if vote_avg_mean is not None:
+        print(f"Average vote average: {vote_avg_mean:.4f}")
+    else:
+        print("Average vote average: N/A")
+
+    if vote_count_mean is not None:
+        print(f"Average vote count: {vote_count_mean:.2f}")
+    else:
+        print("Average vote count: N/A")
+
+    if rev_mean is not None:
+        print(f"Revenue mean: {rev_mean:,.2f}")
+        print(f"Revenue median: {rev_median:,.2f}")
+        print(f"Revenue max: {rev_max:,.0f}")
+        print(f"Revenue min: {rev_min:,.0f}")
+        print(f"Movies with revenue non-null: {len(rev_series)} / {len(stats_df)}")
+    else:
+        print("No revenue data available.")
+    print('='*70)
+
 if __name__ == '__main__':
     data_files = {
         'movies_metadata.csv': 'data/movies_cleaned/movies_metadata_cleaned.csv',
@@ -599,6 +638,11 @@ if __name__ == '__main__':
                 else:
                     print("WARNING: ratings or links data not available, skipping vote count correction")
                 cleaned_df = merge_duplicate_movies(cleaned_df, ratings_df, links_df)
+                # Print vote and revenue statistics required for the report
+                try:
+                    print_vote_and_revenue_stats(cleaned_df)
+                except Exception as e:
+                    print(f"Failed to compute/print stats: {e}")
                 save_cleaned_movies(cleaned_df, output_file)
             elif input_file == 'credits.csv':
                 cleaned_df = clean_credits_crew(df)
