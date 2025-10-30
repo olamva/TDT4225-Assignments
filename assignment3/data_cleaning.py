@@ -15,6 +15,49 @@ def clean_movies_runtime(df):
     print(f"Rows after cleaning: {len(df)}")
 
     cleaned_df = df.copy()
+    # Ensure we have a parsed genres list available for filtering and later use
+    if 'genres_list' not in cleaned_df.columns:
+        def extract_genres(genre_str):
+            try:
+                genres = ast.literal_eval(genre_str)
+                return [g['name'] for g in genres] if isinstance(genres, list) else []
+            except:
+                return []
+        cleaned_df['genres_list'] = cleaned_df['genres'].apply(extract_genres)
+
+    # Remove rows where any genre/production entry matches a blacklist
+    blacklist_raw = [
+        "Aniplex",
+        "BROSTA TV2",
+        "Carousel Productions",
+        "GoHands",
+        "Mardock Scramble Production Committee",
+        "Odyssey Media",
+        "Pulser Productions ",
+        "Rogue State",
+        "Sentai Filmworks ",
+        "Telescene Film Group Productions",
+        "The Cartel",
+        "Vision View Entertainment"
+    ]
+    blacklist = {s.strip() for s in blacklist_raw}
+
+    def has_blacklisted(genres_list):
+        if not genres_list:
+            return False
+        for g in genres_list:
+            try:
+                if g and g.strip() in blacklist:
+                    return True
+            except Exception:
+                continue
+        return False
+
+    bad_mask = cleaned_df['genres_list'].apply(has_blacklisted)
+    if bad_mask.sum() > 0:
+        print(f"Removing {bad_mask.sum()} rows because genres/producers are blacklisted")
+        cleaned_df = cleaned_df[~bad_mask].copy()
+
     zero_runtime_mask = cleaned_df['runtime'] == 0
 
     if zero_runtime_mask.sum() > 0:
